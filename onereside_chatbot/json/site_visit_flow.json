@@ -1,0 +1,115 @@
+{
+  "screens": [
+    {
+      "data": {},
+      "id": "RECOMMEND",
+      "layout": {
+        "children": [
+          {
+            "children": [
+              {
+                "input-type": "text",
+                "label": "First Name",
+                "name": "First_Name_50676b",
+                "required": true,
+                "type": "TextInput"
+              },
+              {
+                "input-type": "text",
+                "label": "Last Name",
+                "name": "Last_Name_d01818",
+                "required": true,
+                "type": "TextInput"
+              },
+              {
+                "input-type": "text",
+                "label": "Age",
+                "name": "Age_514e65",
+                "required": true,
+                "type": "TextInput"
+              },
+              {
+                "input-type": "text",
+                "label": "Phone Number",
+                "name": "Phone_Number_30e62e",
+                "required": true,
+                "type": "TextInput"
+              },
+              {
+                "label": "Appointment Date",
+                "name": "Appointment_Date_2d4705",
+                "required": true,
+                "type": "DatePicker"
+              },
+              {
+                "input-type": "text",
+                "label": "Time",
+                "name": "Time_6d68fa",
+                "required": true,
+                "type": "TextInput",
+                "helper-text": "for ex: 12:30 pm"
+              },
+              {
+                "data-source": [
+                  { "id": "0_Neuro", "title": "Neurosurgery" },
+                  { "id": "1_OncoSurg", "title": "Oncology Surg" },
+                  { "id": "2_CTVS", "title": "Cardio-Thoracic" },
+                  { "id": "3_Plastic", "title": "Plastic Surg" },
+                  { "id": "4_Pediatric", "title": "Pediatric Surg" },
+                  { "id": "5_Nephro", "title": "Nephrology" },
+                  { "id": "6_Gastro", "title": "Gastroenterology" },
+                  { "id": "7_Urology", "title": "Urology" },
+                  { "id": "8_Oncology", "title": "Oncology" },
+                  { "id": "9_Neuro", "title": "Neurology" },
+                  { "id": "10_PediaNeo", "title": "Pediatrics" },
+                  { "id": "11_Cardio", "title": "Cardiology" },
+                  { "id": "12_Ortho", "title": "Orthopaedics" },
+                  { "id": "13_Gynae", "title": "Gynaecology" },
+                  { "id": "14_Pulmo", "title": "Pulmonology" },
+                  { "id": "15_Psych", "title": "Psychiatry" },
+                  { "id": "16_Eye", "title": "Ophthalmology" },
+                  { "id": "17_Anaesth", "title": "Neuro Anaesth" },
+                  { "id": "18_Pain", "title": "Pain Mgmt" },
+                  { "id": "19_Arthro", "title": "Arthroscopy" }
+                ],
+                "label": "Department",
+                "name": "Department_c503ac",
+                "required": true,
+                "type": "Dropdown"
+              },
+              {
+                "label": "Message",
+                "name": "Message_e70d4e",
+                "required": false,
+                "type": "TextArea"
+              },
+              {
+                "label": "Continue",
+                "on-click-action": {
+                  "name": "complete",
+                  "payload": {
+                    "screen_0_First_Name_0": "${form.First_Name_50676b}",
+                    "screen_0_Last_Name_1": "${form.Last_Name_d01818}",
+                    "screen_0_Age_2": "${form.Age_514e65}",
+                    "screen_0_Phone_Number_3": "${form.Phone_Number_30e62e}",
+                    "screen_0_Appointment_Date_4": "${form.Appointment_Date_2d4705}",
+                    "screen_0_Time_5": "${form.Time_6d68fa}",
+                    "screen_0_Department_6": "${form.Department_c503ac}",
+                    "screen_0_Message_7": "${form.Message_e70d4e}"
+                  }
+                },
+                "type": "Footer"
+              }
+            ],
+            "name": "flow_path",
+            "type": "Form"
+          }
+        ],
+        "type": "SingleColumnLayout"
+      },
+      "terminal": true,
+      "title": "Appointment Form"
+    }
+  ],
+  "version": "7.2"
+}
