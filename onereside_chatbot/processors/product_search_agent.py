@@ -172,9 +172,17 @@ class ProductAgent(Processor):
                 )
 
 
-                # tool handling
-                if response.output[0].type == "function_call":
-                    tool_call = response.output[0]
+                # tool handling — find the function call in output
+                tool_call = None
+                text_message = None
+
+                for item in response.output:
+                    if item.type == "function_call":
+                        tool_call = item
+                    elif item.type == "message":
+                        text_message = item
+
+                if tool_call:
                     tool_name = tool_call.name
                     args = json.loads(tool_call.arguments)
 
@@ -260,10 +268,10 @@ class ProductAgent(Processor):
 
 
                 else:
-                    if response.output[0].type != "message":
+                    if not text_message or text_message.type != "message":
                         raise ValueError("Model did not return final message")
 
-                    output_text = response.output[0].content[0].text
+                    output_text = text_message.content[0].text
                     output = json.loads(output_text)
 
                     data["bot_response"] = [
@@ -273,7 +281,6 @@ class ProductAgent(Processor):
                         }
                     ]
                     data["service_selected"] = ""
-
                     return data
                 
 
