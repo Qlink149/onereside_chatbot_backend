@@ -46,7 +46,7 @@ def ping():
 
 
 @app.post("/gupshup/message/onereside")
-async def git_messages(data: Request):
+async def messages(data: Request):
     """Message endpoint to send a message to the chatbot."""
     request_data = await data.json()
     logger.info("Request received with data", extra={"data": request_data})
@@ -147,7 +147,6 @@ async def git_messages(data: Request):
             {
                 "type": "text",
                 "text": "Unexpected error occured.",
-                "source": "git"
             }
         ]
         save_to_mongo(data=data)

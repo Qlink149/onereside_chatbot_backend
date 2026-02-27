@@ -13,7 +13,7 @@ class InitialPipeline(Pipeline):
     """Pipeline class for inital user registartion and service list."""
 
     def __init__(self) -> None:
-        processors = [UserRegistration, QRProcessor(), Classifier()]
+        processors = [UserRegistration(), QRProcessor(), Classifier()]
         super().__init__(processors)
 
 
