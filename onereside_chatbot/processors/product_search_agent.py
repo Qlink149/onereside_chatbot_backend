@@ -190,6 +190,11 @@ class ProductAgent(Processor):
                     else:
                         products = []
 
+                    logger.info(
+                        "Tool searched producs",
+                        extra={"tool_name": tool_name, "products": json.dumps(products)},
+                    )
+
                     # feed results to presenter agent
                     messages = [
                         {"role": "system", "content": f"Username: {username}"},
