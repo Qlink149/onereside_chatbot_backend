@@ -3,7 +3,7 @@
 ARG ENV_MODE=prod
 ARG PYTHON_VERSION=3.12.4
 
-FROM python:${PYTHON_VERSION}-slim-bullseye AS base
+FROM python:${PYTHON_VERSION}-slim-bookworm AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
@@ -15,7 +15,7 @@ WORKDIR /app
 FROM base AS builder
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends git openssh-client && \
+    apt-get install -y --no-install-recommends git openssh-client sqlite3 libsqlite3-dev && \
     rm -rf /var/lib/apt/lists/* && \
     mkdir -p -m 0600 ~/.ssh && \
     ssh-keyscan github.com >> ~/.ssh/known_hosts

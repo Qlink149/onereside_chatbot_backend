@@ -3,22 +3,18 @@ import uuid
 import chromadb
 from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
 from onereside_chatbot.constants import TEXT_EMBEDDING_MODEL
-from onereside_chatbot.utils.env_load import chroma_tenant, chroma_api, openai_api_key
+from onereside_chatbot.utils.env_load import chorma_tenant, chroma_api, openai_api_key
 from onereside_chatbot.utils.logger_config import logger
 
 
 chromaClient = chromadb.CloudClient(
-    tenant=chroma_tenant,
+    tenant=chorma_tenant,
     database="OneReside",
     api_key=chroma_api
 )
 
 product_collection = chromaClient.get_collection(
-    name="product",
-    embedding_function=OpenAIEmbeddingFunction(
-        api_key=openai_api_key,
-        model_name=TEXT_EMBEDDING_MODEL
-    )
+    name="product"
 )
 
 

@@ -1,7 +1,7 @@
 fastapi[all]==0.111.0
 httpx
 openai
-pinecone
+chromadb
 pymongo
 pyreadline3
 python-dotenv

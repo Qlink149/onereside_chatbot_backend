@@ -127,3 +127,6 @@ venv/
 ENV/
 ENV.bak/
 venv.bak/
+
+
+testing
