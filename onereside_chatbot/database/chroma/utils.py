@@ -9,12 +9,12 @@ from onereside_chatbot.utils.logger_config import logger
 
 chromaClient = chromadb.CloudClient(
     tenant=chroma_tenant,
-    database="one_reside",
+    database="OneReside",
     api_key=chroma_api
 )
 
 product_collection = chromaClient.get_collection(
-    name="product_descriptions",
+    name="product",
     embedding_function=OpenAIEmbeddingFunction(
         api_key=openai_api_key,
         model_name=TEXT_EMBEDDING_MODEL
