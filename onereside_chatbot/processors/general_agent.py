@@ -52,7 +52,7 @@ class GeneralAgent(Processor):
                     instructions=general_prompt,
                     input=messages,
                     text=output_schema,
-                    max_output_tokens=300,
+                    max_output_tokens=500,
                 )
 
                 logger.info(
