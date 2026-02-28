@@ -19,6 +19,7 @@ from onereside_chatbot.whatsapp_functions.quick_reply.send_quick_reply import (
 )
 from onereside_chatbot.whatsapp_functions.send_text_message import send_text_message
 from onereside_chatbot.utils.logger_config import logger
+import time
 
 
 class ResponseManager:
@@ -72,6 +73,7 @@ class ResponseManager:
                         logger.warning(f"Message not confirmed: {result}")
                     else:
                         logger.info("message submitted")
+                        time.sleep(0.2)
             else:
                 raise ValueError(
                     f"No handler registered for response type: {response_type}"
