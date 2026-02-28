@@ -28,6 +28,7 @@ def send_image_message(phone_number: str, bot_response: dict):
         "type": "image",
         "caption": bot_response.get("caption", ""),
         "originalUrl": bot_response.get("url"),
+        "previewUrl": bot_response.get("url")
     }
 
     data = {

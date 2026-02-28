@@ -249,8 +249,8 @@ class ProductAgent(Processor):
                                         "type": "media",
                                         "media_type": urls.get("type"),
                                         "url": urls.get("url"),
-                                        "caption": product.get("product_name"),
-                                        "filename": product.get("product_name")
+                                        "caption": product.get("name"),
+                                        "filename": product.get("name")
                                     }
                                 )
                         
