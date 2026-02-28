@@ -83,7 +83,7 @@ class ResponseManager:
         send_text_message(phone_number=phone_number, bot_response=bot_response)
 
     def _handle_quick_reply(self, phone_number, bot_response):
-        """Processes text responses (e.g., sending cta urls).
+        """Processes quick reply.
 
         : phone_number: Contains the phone number of the user
         : bot_response: A dictionary containing the response details.
@@ -96,7 +96,7 @@ class ResponseManager:
         : phone_number: Contains the phone number of the user
         : bot_response: A dictionary containing the response details.
         """
-        send_quickreply(phone_number=phone_number, bot_response=bot_response)
+        pass
 
     def _handle_url(self, phone_number, bot_response):
         """Processes text responses (e.g., sending cta urls).
