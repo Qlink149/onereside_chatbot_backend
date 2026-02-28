@@ -80,7 +80,7 @@ class ResponseManager:
         : phone_number: Contains the phone number of the user
         : bot_response: A dictionary containing the response details.
         """
-        send_text_message(phone_number=phone_number, bot_response=bot_response)
+        return send_text_message(phone_number=phone_number, bot_response=bot_response)
 
     def _handle_quick_reply(self, phone_number, bot_response):
         """Processes quick reply.
@@ -88,7 +88,7 @@ class ResponseManager:
         : phone_number: Contains the phone number of the user
         : bot_response: A dictionary containing the response details.
         """
-        send_quickreply(phone_number=phone_number, bot_response=bot_response)
+        return send_quickreply(phone_number=phone_number, bot_response=bot_response)
 
     def _handle_skip(self, phone_number, bot_response):
         """Processes text responses (e.g., sending cta urls).
@@ -96,7 +96,7 @@ class ResponseManager:
         : phone_number: Contains the phone number of the user
         : bot_response: A dictionary containing the response details.
         """
-        pass
+        return {"status": "submitted"}
 
     def _handle_url(self, phone_number, bot_response):
         """Processes text responses (e.g., sending cta urls).
@@ -104,7 +104,7 @@ class ResponseManager:
         : phone_number: Contains the phone number of the user
         : bot_response: A dictionary containing the response details.
         """
-        send_cta_url(phone_number=phone_number, bot_response=bot_response)
+        return send_cta_url(phone_number=phone_number, bot_response=bot_response)
 
     def _handle_list(self, phone_number, bot_response):
         """Processes list responses (e.g., sending lists).
@@ -114,7 +114,7 @@ class ResponseManager:
         """
         list_name = bot_response["list"]
         if list_name == "service_list":
-            send_service_list(phone_number=phone_number)
+            return send_service_list(phone_number=phone_number)
         else:
             raise ValueError(f"Unknown list: {list_name}")
 
@@ -127,7 +127,7 @@ class ResponseManager:
         flow_name = bot_response["flow"]
 
         if flow_name == "site_visit":
-            send_site_visit_flow(phone_number=phone_number)
+            return send_site_visit_flow(phone_number=phone_number)
         else:
             raise ValueError(f"Unknown flow: {flow_name}")
 
@@ -139,15 +139,15 @@ class ResponseManager:
         """
         media_type = bot_response["media_type"]
         if media_type == "image":
-            send_image_message(
+            return send_image_message(
                 phone_number=phone_number, bot_response=bot_response
             )
         elif media_type == "doc":
-            send_file_message(
+            return send_file_message(
                 phone_number=phone_number, bot_response=bot_response
             )
         elif media_type == "audio":
-            send_audio_message(
+            return send_audio_message(
                 phone_number=phone_number, bot_response=bot_response
             )
         else:
