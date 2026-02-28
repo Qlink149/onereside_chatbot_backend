@@ -43,7 +43,7 @@ class ProductAgent(Processor):
 
             # Fetch full product docs from MongoDB
             products = list(pd.find(
-                {"id": {"$in": product_ids}},
+                {"product_id": {"$in": product_ids}},
                 {"_id": 0, "media_url": 0}
             ))
 
