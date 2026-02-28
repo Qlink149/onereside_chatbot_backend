@@ -14,7 +14,11 @@ chromaClient = chromadb.CloudClient(
 )
 
 product_collection = chromaClient.get_collection(
-    name="product"
+    name="product",
+    embedding_function=OpenAIEmbeddingFunction(
+        api_key=openai_api_key,
+        model_name=TEXT_EMBEDDING_MODEL
+    )
 )
 
 
