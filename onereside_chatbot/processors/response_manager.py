@@ -67,8 +67,11 @@ class ResponseManager:
 
             if handler:
                 result = handler(phone_number=phone_number, bot_response=response)
-                if result and result.get("status") != "submitted":
-                    logger.warning(f"Message not confirmed: {result}")
+                if result:
+                    if result.get("status") != "submitted":
+                        logger.warning(f"Message not confirmed: {result}")
+                    else:
+                        logger.info("message submitted")
             else:
                 raise ValueError(
                     f"No handler registered for response type: {response_type}"
