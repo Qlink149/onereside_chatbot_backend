@@ -125,7 +125,7 @@ class ProductAgent(Processor):
             if "text" in data["messages"]:
                 user_query = data["messages"]["text"]["body"]
                 brand_id = brand.get("brand_id", "")
-                exclude_ids = user_profile.get("shown_product_ids", [])
+                exclude_ids = []
 
                 # prompt 
                 product_recommender_prompt = build_product_recommender_prompt(
@@ -148,6 +148,10 @@ class ProductAgent(Processor):
                     {
                         "role": "system",
                         "content": f"Recent chat history:\n{chat_history_str}",
+                    },
+                    {
+                        "role": "system", 
+                        "content": f"Last Shown Product: {user_profile.get("last_shown_product", "")}"
                     },
                     {"role": "user", "content": user_query},
                 ]
@@ -242,17 +246,20 @@ class ProductAgent(Processor):
                             product_id=presenter_output.get("product_id")
                         )
 
-                        if product and product.get("media_url"):
-                            for urls in product.get("media_url", []):
-                                bot_response.append(
-                                    {
-                                        "type": "media",
-                                        "media_type": urls.get("type"),
-                                        "url": urls.get("url"),
-                                        "caption": product.get("name"),
-                                        "filename": product.get("name")
-                                    }
-                                )
+                        if product:
+                            if product.get("media_url"):
+                                for urls in product.get("media_url", []):
+                                    bot_response.append(
+                                        {
+                                            "type": "media",
+                                            "media_type": urls.get("type"),
+                                            "url": urls.get("url"),
+                                            "caption": product.get("name"),
+                                            "filename": product.get("name")
+                                        }
+                                    )
+                            
+                            user_profile["last_shown_product"] = json.dumps(product)
                         
                     bot_response.append(
                         {

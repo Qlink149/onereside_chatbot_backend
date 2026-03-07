@@ -17,7 +17,7 @@ from onereside_chatbot.processors.response_manager import ResponseManager
 from onereside_chatbot.utils.logger_config import logger
 
 app = FastAPI(
-    title="Athams OneReside Server Running",
+    title="Athams OneReside Server",
     version="0.1.0",
     redoc_url=None,
     docs_url=None,
@@ -40,7 +40,8 @@ api_router = APIRouter(prefix="/api/v1")
 def ping():
     """Ping endpoint to check if the server is running."""
     logger.info("Ping endpoint called")
-    return {"message": "Qlink <> Pacific Bot backend API is up and running"}
+    return {"message": "OneReside Chatbot Server is up and running"}
+    return {"message": "OneReside Chatbot Server is up and running"}
 
 
 

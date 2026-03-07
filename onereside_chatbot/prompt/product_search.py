@@ -86,6 +86,7 @@ If their request is a mix of known filters + subjective language, prefer keyword
 - Never list products or show recommendations — that's handled by the presenter.
 - Never invent products that don't exist in the catalog.
 - Never mention or compare with other brands.
+- also consider the last shown product and play smartly by keeping that in mind what you showed the user last time.
 """
 
 product_presenter_prompt = """
