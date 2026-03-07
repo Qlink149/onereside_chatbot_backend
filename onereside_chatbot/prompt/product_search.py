@@ -46,17 +46,28 @@ Pay close attention to how the customer responds. Their words tell you how stric
 
 People type fast on WhatsApp. If a message looks like a typo or shorthand — like "chle" for "chair" or "tbl" for "table" — use your best guess and go with it. Don't say you can't find a match for the misspelled word. If you genuinely can't figure out what they meant, ask casually: "Sorry, didn't catch that — what were you looking for?"
 
-## Tools
+## When to Use Which Search Tool
 
-**semantic_search** — Use when the user describes what they want in subjective or feeling-based language ("something gallery-like," "warm and inviting," "Japanese minimalism vibes"). Pass a rich, descriptive query.
+**keyword_search** — Use when the customer's request maps clearly to known catalog attributes:
+- Categories: {categories_offered}
+- Style tags: {all_style_tags}
+- Colors: {all_colors}
+- Rooms: {all_rooms}
+- Or any combination of the above with price, material, etc.
 
-**keyword_search** — Use when the user gives concrete, filterable preferences (category, material, color, price range, room type). Pass structured filters.
+**semantic_search** — Use when the customer's request does NOT map to known attributes. This includes:
+- Subjective or feeling-based descriptions ("something gallery-like," "warm and inviting," "Japanese minimalism vibes")
+- Categories, styles, colors, or room types that are NOT in the lists above (e.g., if someone asks for "ottomans" and that's not a known category, search semantically instead of returning nothing)
+- Vague or creative requests where structured filters would be too restrictive
 
-If their request is a mix, prefer keyword_search and put the subjective part into style_tags.
+**Rule of thumb:** If you can't confidently map the request to existing category/style/color/room values, use semantic_search. It's better to find something close than to return nothing.
+
+If their request is a mix of known filters + subjective language, prefer keyword_search and put the subjective part into style_tags.
 
 **When a search returns no results or weak matches:**
 - First, silently retry with LOOSER filters (drop room, broaden style, widen price range).
-- Only tell the customer "no match" if you've already tried a broader search and still found nothing.
+- If keyword_search still returns nothing, try semantic_search with a descriptive query.
+- Only tell the customer "no match" if you've tried both approaches and still found nothing.
 - Never show a "no match" message on the first attempt without trying broader filters.
 
 ## Handling Rejections
@@ -181,13 +192,14 @@ Want to explore a different style, or should I connect you with our team for som
 
 def fetch_brand_metadata(brand_id: str) -> dict:
     """
-    Uses MongoDB aggregation to extract unique tags, colors, 
-    rooms, and price range — without fetching full product docs.
+    Uses MongoDB aggregation to extract unique categories, tags, colors, 
+    rooms, and price range from the product collection.
     """
     pipeline = [
         {"$match": {"brand_id": brand_id}},
         {"$group": {
             "_id": None,
+            "all_categories": {"$addToSet": "$category"},
             "all_style_tags": {"$addToSet": "$style_tags"},
             "all_colors": {"$addToSet": "$colors_available"},
             "all_rooms": {"$addToSet": "$ideal_for"},
@@ -204,6 +216,7 @@ def fetch_brand_metadata(brand_id: str) -> dict:
 
     if not result:
         return {
+            "all_categories": "Various",
             "all_style_tags": "Various",
             "all_colors": "Various",
             "all_rooms": "Various",
@@ -212,6 +225,7 @@ def fetch_brand_metadata(brand_id: str) -> dict:
 
     data = result[0]
 
+    categories = sorted(set(data.get("all_categories", [])))
     style_tags = sorted(set(t for arr in data.get("all_style_tags", []) for t in arr))
     colors = sorted(set(c for arr in data.get("all_colors", []) for c in arr))
     rooms = sorted(set(r for arr in data.get("all_rooms", []) for r in arr))
@@ -221,6 +235,7 @@ def fetch_brand_metadata(brand_id: str) -> dict:
     price_range = f"₹{min_p:,.0f} to ₹{max_p:,.0f}" if min_p and max_p else "Not available"
 
     return {
+        "all_categories": ", ".join(categories) or "Various",
         "all_style_tags": ", ".join(style_tags) or "Various",
         "all_colors": ", ".join(colors) or "Various",
         "all_rooms": ", ".join(rooms) or "Various",
@@ -229,21 +244,21 @@ def fetch_brand_metadata(brand_id: str) -> dict:
 
 
 def build_product_recommender_prompt(brand: dict) -> str:
-    """Returns the recommender prompt."""
+    """Returns the recommender prompt with categories from the product collection."""
     brand_id = brand.get("brand_id", "")
     meta = fetch_brand_metadata(brand_id)  
 
-    categories = brand.get("categories_offered", [])
-    if len(categories) > 1:
-        categories_as_options = ", ".join(categories[:-1]) + f", or {categories[-1]}"
+    categories_list = [c.strip() for c in meta["all_categories"].split(",")]
+    if len(categories_list) > 1:
+        categories_as_options = ", ".join(categories_list[:-1]) + f", or {categories_list[-1]}"
     else:
-        categories_as_options = categories[0] if categories else "something"
+        categories_as_options = categories_list[0] if categories_list else "something"
 
     return product_recommender_prompt.format(
         brand_name=brand.get("brand_name", ""),
         brand_id=brand_id,
         brand_description=brand.get("brand_description", ""),
-        categories_offered=", ".join(categories),
+        categories_offered=meta["all_categories"],
         categories_as_options=categories_as_options,
         price_range=meta["price_range"],
         all_style_tags=meta["all_style_tags"],
@@ -305,7 +320,7 @@ presenter_output_schema = {
 semantic_search_tool = {
     "type": "function",
     "name": "semantic_search",
-    "description": "Search products by semantic similarity when the user describes what they want in subjective, feeling-based, or descriptive language. Examples: 'something gallery-like', 'warm and inviting', 'Japanese minimalism vibes'.",
+    "description": "Search products by semantic similarity when the user describes what they want in subjective, feeling-based, or descriptive language. Also use when the user's request doesn't match any known catalog attributes (categories, style tags, colors, rooms). Examples: 'something gallery-like', 'warm and inviting', 'Japanese minimalism vibes', or any category/style not in the catalog.",
     "parameters": {
         "type": "object",
         "properties": {
@@ -321,7 +336,7 @@ semantic_search_tool = {
 keyword_search_tool = {
     "type": "function",
     "name": "keyword_search",
-    "description": "Search products by structured filters when the user gives specific preferences like category, material, color, price range, or room type. Examples: 'wooden accent chair under 3 lakhs', 'black marble coffee table'.",
+    "description": "Search products by structured filters when the user gives specific preferences that match known catalog attributes like category, material, color, price range, or room type. Examples: 'wooden accent chair under 3 lakhs', 'black marble coffee table'.",
     "parameters": {
         "type": "object",
         "properties": {
