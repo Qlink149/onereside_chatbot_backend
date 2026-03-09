@@ -129,7 +129,9 @@ class ProductAgent(Processor):
             if "text" in data["messages"]:
                 user_query = data["messages"]["text"]["body"]
                 brand_id = brand.get("brand_id", "")
-                exclude_ids = []
+                shown_ids = user_profile.get("shown_product_ids", [])
+                exclude_ids = shown_ids[-5:] if shown_ids else []
+
 
                 # prompt 
                 product_recommender_prompt = build_product_recommender_prompt(
