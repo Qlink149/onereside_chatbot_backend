@@ -39,6 +39,15 @@ class Classifier(Processor):
             return data
 
         try:
+            if "interactive" in data["messages"]:
+                interactive = data["messages"]["interactive"]
+
+                if interactive.get("type") == "button_reply":
+                    data["button_reply"] = interactive.get("button_reply")
+                    if data["button_reply"]["title"] == "Buy":
+                        user_profile["service_selected"] = ServiceList.PRODUCT_CHECKOUT.value
+                        return data
+
             if "text" in data["messages"]:
                 user_query = data["messages"]["text"]["body"]
 

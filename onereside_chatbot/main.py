@@ -11,7 +11,8 @@ from onereside_chatbot.pipelines.inference_pipeline import (
     InitialPipeline,
     GeneralPipeline,
     ProductSearchPipeline, 
-    OneResidePipeline
+    OneResidePipeline,
+    ProductCheckoutPipeline
 )
 from onereside_chatbot.processors.response_manager import ResponseManager
 from onereside_chatbot.utils.logger_config import logger
@@ -40,7 +41,6 @@ api_router = APIRouter(prefix="/api/v1")
 def ping():
     """Ping endpoint to check if the server is running."""
     logger.info("Ping endpoint called")
-    return {"message": "OneReside Chatbot Server is up and running"}
     return {"message": "OneReside Chatbot Server is up and running"}
 
 
@@ -134,6 +134,12 @@ async def messages(data: Request):
                 == ServiceList.ONE_RESIDE.value
             ):
                 pipeline = OneResidePipeline()
+
+            elif (
+                user_profile["service_selected"]
+                == ServiceList.PRODUCT_CHECKOUT.value
+            ):
+                pipeline = ProductCheckoutPipeline()
 
             data = await pipeline.run(data=data)
             save_to_mongo(data=data)

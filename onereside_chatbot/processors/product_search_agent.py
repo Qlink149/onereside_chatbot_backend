@@ -59,7 +59,6 @@ class ProductAgent(Processor):
             return []
 
     def handle_keyword_search(self, args: dict, brand_id: str, exclude_ids: list) -> list:
-        """Handle keyword search tool call. Returns list of product docs from MongoDB."""
         try:
             query = {"brand_id": brand_id}
 
@@ -67,15 +66,21 @@ class ProductAgent(Processor):
                 query["category"] = args["category"]
 
             if args.get("ideal_for"):
-                query["ideal_for"] = args["ideal_for"]
+                query["ideal_for"] = args["ideal_for"] 
 
-            if args.get("price_min") or args.get("price_max"):
+            price_min = args.get("price_min", 0)
+            price_max = args.get("price_max", 0)
+            if price_min > 0 or (price_max > 0 and price_max < 10000000):
                 price_filter = {}
-                if args.get("price_min"):
-                    price_filter["$gte"] = args["price_min"]
-                if args.get("price_max"):
-                    price_filter["$lte"] = args["price_max"]
-                query["price_inr"] = price_filter
+                if price_min > 0:
+                    price_filter["$gte"] = price_min
+                if price_max > 0:
+                    price_filter["$lte"] = price_max
+
+                query["$or"] = [
+                    {"price_inr": price_filter},
+                    {"price_inr": None}
+                ]
 
             if args.get("style_tags"):
                 query["style_tags"] = {"$in": args["style_tags"]}
@@ -87,14 +92,13 @@ class ProductAgent(Processor):
                 query["colors_available"] = {"$regex": args["colors"], "$options": "i"}
 
             if exclude_ids:
-                query["id"] = {"$nin": exclude_ids}
-
+                query["product_id"] = {"$nin": exclude_ids} 
 
             products = list(pd.find(query, {"_id": 0, "media_url": 0}).limit(3))
 
             logger.info(
                 "Keyword search results",
-                extra={"filters": args, "results": [p.get("id") for p in products]}
+                extra={"filters": args, "results": [p.get("product_id") for p in products]}
             )
 
             return products
@@ -260,13 +264,24 @@ class ProductAgent(Processor):
                                     )
                             
                             user_profile["last_shown_product"] = json.dumps(product)
-                        
-                    bot_response.append(
-                        {
-                            "type": "text",
-                            "text": presenter_output.get("message", "")
-                        }
-                    )
+
+                            bot_response.append(
+                                {
+                                    "type": "quickreply",
+                                    "text": presenter_output.get("message", ""),
+                                    "caption": "Click the cta to buy the product.",
+                                    "options": [{"title": "Buy"}],
+                                    "msgid": f"buy_{presenter_output.get('product_id')}"
+                                }
+                            )
+
+                    else:    
+                        bot_response.append(
+                            {
+                                "type": "text",
+                                "text": presenter_output.get("message", "")
+                            }
+                        )
 
                     data["bot_response"] = bot_response
                     data["service_selected"] = ""

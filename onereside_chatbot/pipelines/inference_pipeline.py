@@ -4,6 +4,7 @@ from onereside_chatbot.processors.qr_processor import QRProcessor
 from onereside_chatbot.processors.general_agent import GeneralAgent
 from onereside_chatbot.processors.product_search_agent import ProductAgent
 from onereside_chatbot.processors.one_reside_agent import OneResideAgent
+from onereside_chatbot.processors.product_checkout import ProductCheckoutAgent
 from onereside_chatbot.processors.user_registration import (
     UserRegistration,
 )
@@ -36,4 +37,11 @@ class OneResidePipeline(Pipeline):
 
     def __init__(self) -> None:
         processors = [OneResideAgent()]
+        super().__init__(processors)
+        
+class ProductCheckoutPipeline(Pipeline):
+    """Pipeline class for one reside."""
+
+    def __init__(self) -> None:
+        processors = [ProductCheckoutAgent()]
         super().__init__(processors)

@@ -7,4 +7,5 @@ class ServiceList(Enum):
     GENERAL = "general"
     PRODUCT_SEARCH = "product_search"
     ONE_RESIDE = "one_reside"
+    PRODUCT_CHECKOUT = "product_checkout"
 
