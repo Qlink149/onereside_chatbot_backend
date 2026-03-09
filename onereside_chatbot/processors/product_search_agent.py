@@ -222,6 +222,10 @@ class ProductAgent(Processor):
                             "role": "system",
                             "content": f"fetched products are: {json.dumps(products)}"
                         },
+                        {
+                            "role": "system", 
+                            "content": f"Last Shown Product: {user_profile.get("last_shown_product", "")}"
+                        },
                         {"role": "user", "content": user_query},
                     ]
 
