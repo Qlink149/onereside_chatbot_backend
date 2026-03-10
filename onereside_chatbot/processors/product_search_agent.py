@@ -5,184 +5,161 @@ from onereside_chatbot.prompt.product_search import (
     build_product_recommender_prompt,
     output_schema,
     presenter_output_schema,
-    semantic_search_tool,
-    keyword_search_tool
+    search_products_tool,
 )
 from onereside_chatbot.utils.get_openai_client import openai_client
 from onereside_chatbot.database.collections import product as pd
 from onereside_chatbot.database.chroma.utils import semantic_search
-from onereside_chatbot.database.db_utils import get_product_by_id, get_brands_by_ids
+from onereside_chatbot.database.db_utils import get_product_by_id, get_brands_by_ids, get_catalog_metadata
 
 import json
+
+
+# Fields sent to the presenter — enough for good recommendations, not full docs
+PRESENTER_FIELDS = {
+    "product_id", "name", "price_inr", "brand_id", "category",
+    "style_tags", "ideal_for", "materials", "colors_available",
+    "description", "delivery_timeline",
+}
+
+
+def _trim_for_presenter(products: list) -> list:
+    return [{k: v for k, v in p.items() if k in PRESENTER_FIELDS} for p in products]
 
 
 class ProductAgent(Processor):
     """Search a product search Query."""
 
     def should_run(self, data: dict) -> bool:
-        """Determine whether the processor should run based on the input data."""
         if "bot_response" in data:
             return False
         return True
 
-    def handle_semantic_search(self, args: dict, exclude_ids: list) -> list:
-        """Handle semantic search tool call. Returns list of product docs from MongoDB."""
+    def handle_search(self, args: dict, exclude_ids: list) -> list:
+        """
+        Single search handler.
+        - Semantic search with optional price / category post-filtering.
+        - If brand_id is passed but returns no results, auto-fallback to all brands.
+        """
         try:
             query = args.get("query", "")
-            brand_id_arg = args.get("brand_id")
-            brand_ids = [brand_id_arg] if brand_id_arg else None
+            brand_id = args.get("brand_id")
+            price_min = args.get("price_min") or 0
+            price_max = args.get("price_max") or 0
+            category = args.get("category")
 
-            # Vector search → returns product IDs
+            # Wider pool when price/category filters will be applied post-search
+            has_filters = price_min > 0 or (0 < price_max < 10_000_000) or category
+            n_results = 15 if has_filters else 5
+
+            def fetch_products(product_ids: list) -> list:
+                if not product_ids:
+                    return []
+                # Exclude already-shown IDs before hitting Mongo
+                filtered_ids = [pid for pid in product_ids if pid not in exclude_ids]
+                if not filtered_ids:
+                    return []
+
+                q = {"product_id": {"$in": filtered_ids}}
+                if category:
+                    q["category"] = category
+                if price_min > 0 or (0 < price_max < 10_000_000):
+                    price_filter = {}
+                    if price_min > 0:
+                        price_filter["$gte"] = price_min
+                    if 0 < price_max < 10_000_000:
+                        price_filter["$lte"] = price_max
+                    q["$or"] = [
+                        {"price_inr": price_filter},
+                        {"price_inr": None},
+                    ]
+                return list(pd.find(q, {"_id": 0, "media_url": 0}).limit(3))
+
+            # Step 1: search within brand (if brand_id provided)
             product_ids = semantic_search(
                 query=query,
-                brand_ids=brand_ids,
-                exclude_ids=exclude_ids,
-                n_results=3
+                brand_ids=[brand_id] if brand_id else None,
+                n_results=n_results,
             )
+            products = fetch_products(product_ids)
 
-            if not product_ids:
-                return []
-
-            # Fetch full product docs from MongoDB
-            products = list(pd.find(
-                {"product_id": {"$in": product_ids}},
-                {"_id": 0, "media_url": 0}
-            ))
+            # Step 2: cross-brand fallback — brand had no match
+            if not products and brand_id:
+                logger.info(
+                    "Brand search returned no results, falling back to all brands",
+                    extra={"brand_id": brand_id, "query": query},
+                )
+                product_ids = semantic_search(query=query, brand_ids=None, n_results=n_results)
+                products = fetch_products(product_ids)
 
             logger.info(
-                "Semantic search results",
-                extra={"query": query, "results": [p.get("id") for p in products]}
+                "Search completed",
+                extra={"query": query, "brand_id": brand_id, "results": [p.get("product_id") for p in products]},
             )
-
             return products
 
         except Exception as e:
-            logger.error("Error in semantic search handler", extra={"error": e})
+            logger.error("Error in handle_search", extra={"error": e})
             return []
 
-    def handle_keyword_search(self, args: dict, exclude_ids: list) -> list:
-        try:
-            query = {}
-
-            brand_id_arg = args.get("brand_id")
-            if brand_id_arg:
-                query["brand_id"] = brand_id_arg
-
-            if args.get("category"):
-                query["category"] = args["category"]
-
-            if args.get("ideal_for"):
-                query["ideal_for"] = args["ideal_for"] 
-
-            price_min = args.get("price_min", 0)
-            price_max = args.get("price_max", 0)
-            if price_min > 0 or (price_max > 0 and price_max < 10000000):
-                price_filter = {}
-                if price_min > 0:
-                    price_filter["$gte"] = price_min
-                if price_max > 0:
-                    price_filter["$lte"] = price_max
-
-                query["$or"] = [
-                    {"price_inr": price_filter},
-                    {"price_inr": None}
-                ]
-
-            if args.get("style_tags"):
-                query["style_tags"] = {"$in": args["style_tags"]}
-
-            if args.get("materials"):
-                query["materials"] = {"$regex": args["materials"], "$options": "i"}
-
-            if args.get("colors"):
-                query["colors_available"] = {"$regex": args["colors"], "$options": "i"}
-
-            if exclude_ids:
-                query["product_id"] = {"$nin": exclude_ids} 
-
-            products = list(pd.find(query, {"_id": 0, "media_url": 0}).limit(3))
-
-            logger.info(
-                "Keyword search results",
-                extra={"filters": args, "results": [p.get("product_id") for p in products]}
-            )
-
-            return products
-
-        except Exception as e:
-            logger.error("Error in keyword search handler", extra={"error": e})
-            return []
-    
     async def process(self, data: dict) -> dict:
-        """Process the input data and return the processed data."""
         phone_number = data["phone_number"]
         user_profile = data["user_profile"]
         username = user_profile["username"]
         brand = data.get("brand")
-        
-        
+
         if not self.should_run(data):
             logger.info(
                 "Skipping processor",
-                extra={
-                    "processor": self.__class__.__name__,
-                    "phone_number": phone_number,
-                },
+                extra={"processor": self.__class__.__name__, "phone_number": phone_number},
             )
             return data
-        
+
         try:
             if "text" in data["messages"]:
                 user_query = data["messages"]["text"]["body"]
                 shown_ids = user_profile.get("shown_product_ids", [])
                 exclude_ids = shown_ids[-5:] if shown_ids else []
 
-                # prompt
-                product_recommender_prompt = build_product_recommender_prompt(brand=brand)
+                # Fetch catalog metadata for prompt injection
+                catalog_metadata = get_catalog_metadata()
+
+                # Build prompts
+                product_recommender_prompt = build_product_recommender_prompt(
+                    brand=brand,
+                    catalog_metadata=catalog_metadata,
+                )
                 product_presenter_prompt = build_product_presenter_prompt()
 
-                # chat history
+                # Chat history
                 chat_history = user_profile.get("chat_history", [])[-10:]
                 chat_history_str = "\n".join(
                     f"{c.get('role','').capitalize()}: {c.get('content','')}"
                     for c in chat_history
                 )
 
-                # agent input
                 messages = [
                     {"role": "system", "content": f"Username: {username}"},
-                    {
-                        "role": "system",
-                        "content": f"Recent chat history:\n{chat_history_str}",
-                    },
-                    {
-                        "role": "system", 
-                        "content": f"Last Shown Product: {user_profile.get("last_shown_product", "")}"
-                    },
+                    {"role": "system", "content": f"Recent chat history:\n{chat_history_str}"},
+                    {"role": "system", "content": f"Last Shown Product: {user_profile.get('last_shown_product', '')}"},
                     {"role": "user", "content": user_query},
                 ]
 
-
-                # first agent call
+                # Recommender call
                 response = await openai_client.responses.create(
                     model="gpt-4.1-mini",
                     instructions=product_recommender_prompt,
                     input=messages,
-                    tools=[semantic_search_tool, keyword_search_tool],
+                    tools=[search_products_tool],
                     text=output_schema,
                     max_output_tokens=200,
                 )
 
                 logger.info(
-                    "Initial OpenAI response",
-                    extra={
-                        "response": response.model_dump(), 
-                        "phone_number": phone_number
-                    },
+                    "Recommender response",
+                    extra={"response": response.model_dump(), "phone_number": phone_number},
                 )
 
-
-                # tool handling — find the function call in output
                 tool_call = None
                 text_message = None
 
@@ -193,22 +170,13 @@ class ProductAgent(Processor):
                         text_message = item
 
                 if tool_call:
-                    tool_name = tool_call.name
                     args = json.loads(tool_call.arguments)
 
-                    logger.info(
-                        "Tool invoked",
-                        extra={"tool_name": tool_name, "arguments": args},
-                    )
+                    logger.info("Tool invoked", extra={"arguments": args})
 
-                    if tool_name == "semantic_search":
-                        products = self.handle_semantic_search(args, exclude_ids)
-                    elif tool_name == "keyword_search":
-                        products = self.handle_keyword_search(args, exclude_ids)
-                    else:
-                        products = []
+                    products = self.handle_search(args, exclude_ids)
 
-                    # enrich products with brand_name
+                    # Enrich with brand_name
                     unique_brand_ids = list({p["brand_id"] for p in products if p.get("brand_id")})
                     if unique_brand_ids:
                         brand_map = {b["brand_id"]: b["brand_name"] for b in get_brands_by_ids(unique_brand_ids)}
@@ -216,33 +184,23 @@ class ProductAgent(Processor):
                             p["brand_name"] = brand_map.get(p.get("brand_id"), "")
 
                     logger.info(
-                        "Tool searched producs",
-                        extra={"tool_name": tool_name, "products": json.dumps(products)},
+                        "Search results",
+                        extra={"products": json.dumps(_trim_for_presenter(products))},
                     )
 
-                    # feed results to presenter agent
-                    messages = [
+                    # Presenter call — trimmed docs only
+                    presenter_messages = [
                         {"role": "system", "content": f"Username: {username}"},
-                        {
-                            "role": "system",
-                            "content": f"Recent chat history:\n{chat_history_str}",
-                        },
-                        {
-                            "role": "system",
-                            "content": f"fetched products are: {json.dumps(products)}"
-                        },
-                        {
-                            "role": "system", 
-                            "content": f"Last Shown Product: {user_profile.get("last_shown_product", "")}"
-                        },
+                        {"role": "system", "content": f"Recent chat history:\n{chat_history_str}"},
+                        {"role": "system", "content": f"Search results: {json.dumps(_trim_for_presenter(products))}"},
+                        {"role": "system", "content": f"Last Shown Product: {user_profile.get('last_shown_product', '')}"},
                         {"role": "user", "content": user_query},
                     ]
-
 
                     presenter_response = await openai_client.responses.create(
                         model="gpt-4.1-mini",
                         instructions=product_presenter_prompt,
-                        input=messages,
+                        input=presenter_messages,
                         text=presenter_output_schema,
                         max_output_tokens=200,
                     )
@@ -254,14 +212,12 @@ class ProductAgent(Processor):
 
                     presenter_output_text = presenter_response.output[0].content[0].text
                     presenter_output = json.loads(presenter_output_text)
-                    
+
                     bot_response = []
 
                     if presenter_output.get("product_id"):
-                        user_profile.setdefault("shown_product_ids", []).append(presenter_output.get("product_id"))
-                        product = get_product_by_id(
-                            product_id=presenter_output.get("product_id")
-                        )
+                        user_profile.setdefault("shown_product_ids", []).append(presenter_output["product_id"])
+                        product = get_product_by_id(product_id=presenter_output["product_id"])
 
                         if product:
                             if product.get("media_url"):
@@ -272,10 +228,10 @@ class ProductAgent(Processor):
                                             "media_type": urls.get("type"),
                                             "url": urls.get("url"),
                                             "caption": product.get("name"),
-                                            "filename": product.get("name")
+                                            "filename": product.get("name"),
                                         }
                                     )
-                            
+
                             user_profile["last_shown_product"] = json.dumps(product)
 
                             bot_response.append(
@@ -284,15 +240,14 @@ class ProductAgent(Processor):
                                     "text": presenter_output.get("message", ""),
                                     "caption": "Click the cta to buy the product.",
                                     "options": [{"title": "Buy"}],
-                                    "msgid": f"buy_{presenter_output.get('product_id')}"
+                                    "msgid": f"buy_{presenter_output['product_id']}",
                                 }
                             )
-
-                    else:    
+                    else:
                         bot_response.append(
                             {
                                 "type": "text",
-                                "text": presenter_output.get("message", "")
+                                "text": presenter_output.get("message", ""),
                             }
                         )
 
@@ -300,28 +255,18 @@ class ProductAgent(Processor):
                     data["service_selected"] = ""
                     return data
 
-
-
                 else:
+                    # Recommender asked a clarifying question (no tool call)
                     if not text_message or text_message.type != "message":
-                        raise ValueError("Model did not return final message")
+                        raise ValueError("Model did not return a final message")
 
                     output_text = text_message.content[0].text
                     output = json.loads(output_text)
 
-                    data["bot_response"] = [
-                        {
-                            "type": "text",
-                            "text": output.get("message", "")
-                        }
-                    ]
+                    data["bot_response"] = [{"type": "text", "text": output.get("message", "")}]
                     data["service_selected"] = ""
                     return data
-                
 
         except Exception as e:
-            logger.exception(
-                "Exception occurred in ProductAgent"
-            )
+            logger.exception("Exception occurred in ProductAgent")
             raise e
-
