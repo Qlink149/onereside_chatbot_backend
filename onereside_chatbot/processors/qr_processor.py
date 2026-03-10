@@ -84,12 +84,7 @@ class QRProcessor(Processor):
                         ]
                     
                 else:
-                    data["bot_response"] = [
-                        {
-                            "type": "text",
-                            "text": "Hi, please scan any qr to continue.",
-                        }
-                    ]
+                    pass  # no brand context — product search handles all-brands mode
 
 
         return data

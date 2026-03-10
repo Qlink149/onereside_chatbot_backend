@@ -181,6 +181,18 @@ def get_brand_by_id(brand_id: str):
         raise e
     
 
+def get_brands_by_ids(brand_ids: list) -> list:
+    """Get multiple brand docs by a list of brand_ids."""
+    try:
+        return list(company.find({"brand_id": {"$in": brand_ids}}, {"_id": 0}))
+    except Exception as e:
+        logger.exception(
+            "Exception occurred while fetching brands by ids.",
+            extra={"brand_ids": brand_ids},
+        )
+        raise e
+
+
 def get_product_by_id(product_id: str):
     """Get product doc by id."""
     try:

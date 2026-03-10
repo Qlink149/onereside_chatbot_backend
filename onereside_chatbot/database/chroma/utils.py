@@ -57,16 +57,17 @@ def add_product(product_id: str, description: str, brand_id: str, category: str)
 
 def semantic_search(
     query: str,
-    brand_id: str,
+    brand_ids: list = None,
     exclude_ids: list = None,
     n_results: int = 3
 ):
     """
-    Search products by semantic similarity within a brand.
+    Search products by semantic similarity.
+    Pass brand_ids to scope to specific brands; omit (or pass None) to search all brands.
     Returns list of matching product IDs.
     """
     try:
-        where_clause = {"brand_id": brand_id}
+        where_clause = {"brand_id": {"$in": brand_ids}} if brand_ids else None
 
         response = product_collection.query(
             query_texts=[query],
@@ -86,7 +87,7 @@ def semantic_search(
             "Semantic search completed.",
             extra={
                 "query": query,
-                "brand_id": brand_id,
+                "brand_ids": brand_ids,
                 "results": product_ids
             }
         )
@@ -96,7 +97,7 @@ def semantic_search(
     except Exception as e:
         logger.error(
             "Error during semantic search.",
-            extra={"query": query, "brand_id": brand_id, "error": e}
+            extra={"query": query, "brand_ids": brand_ids, "error": e}
         )
         raise e
 

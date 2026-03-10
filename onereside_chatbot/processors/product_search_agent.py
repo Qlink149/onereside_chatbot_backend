@@ -11,7 +11,7 @@ from onereside_chatbot.prompt.product_search import (
 from onereside_chatbot.utils.get_openai_client import openai_client
 from onereside_chatbot.database.collections import product as pd
 from onereside_chatbot.database.chroma.utils import semantic_search
-from onereside_chatbot.database.db_utils import get_product_by_id
+from onereside_chatbot.database.db_utils import get_product_by_id, get_brands_by_ids
 
 import json
 
@@ -25,15 +25,17 @@ class ProductAgent(Processor):
             return False
         return True
 
-    def handle_semantic_search(self, args: dict, brand_id: str, exclude_ids: list) -> list:
+    def handle_semantic_search(self, args: dict, exclude_ids: list) -> list:
         """Handle semantic search tool call. Returns list of product docs from MongoDB."""
         try:
             query = args.get("query", "")
+            brand_id_arg = args.get("brand_id")
+            brand_ids = [brand_id_arg] if brand_id_arg else None
 
             # Vector search → returns product IDs
             product_ids = semantic_search(
                 query=query,
-                brand_id=brand_id,
+                brand_ids=brand_ids,
                 exclude_ids=exclude_ids,
                 n_results=3
             )
@@ -58,9 +60,13 @@ class ProductAgent(Processor):
             logger.error("Error in semantic search handler", extra={"error": e})
             return []
 
-    def handle_keyword_search(self, args: dict, brand_id: str, exclude_ids: list) -> list:
+    def handle_keyword_search(self, args: dict, exclude_ids: list) -> list:
         try:
-            query = {"brand_id": brand_id}
+            query = {}
+
+            brand_id_arg = args.get("brand_id")
+            if brand_id_arg:
+                query["brand_id"] = brand_id_arg
 
             if args.get("category"):
                 query["category"] = args["category"]
@@ -128,18 +134,12 @@ class ProductAgent(Processor):
         try:
             if "text" in data["messages"]:
                 user_query = data["messages"]["text"]["body"]
-                brand_id = brand.get("brand_id", "")
                 shown_ids = user_profile.get("shown_product_ids", [])
                 exclude_ids = shown_ids[-5:] if shown_ids else []
 
-
-                # prompt 
-                product_recommender_prompt = build_product_recommender_prompt(
-                    brand=brand
-                )
-                product_presenter_prompt = build_product_presenter_prompt(
-                    brand_name=brand.get("brand_name")
-                )
+                # prompt
+                product_recommender_prompt = build_product_recommender_prompt(brand=brand)
+                product_presenter_prompt = build_product_presenter_prompt()
 
                 # chat history
                 chat_history = user_profile.get("chat_history", [])[-10:]
@@ -202,11 +202,18 @@ class ProductAgent(Processor):
                     )
 
                     if tool_name == "semantic_search":
-                        products = self.handle_semantic_search(args, brand_id, exclude_ids)
+                        products = self.handle_semantic_search(args, exclude_ids)
                     elif tool_name == "keyword_search":
-                        products = self.handle_keyword_search(args, brand_id, exclude_ids)
+                        products = self.handle_keyword_search(args, exclude_ids)
                     else:
                         products = []
+
+                    # enrich products with brand_name
+                    unique_brand_ids = list({p["brand_id"] for p in products if p.get("brand_id")})
+                    if unique_brand_ids:
+                        brand_map = {b["brand_id"]: b["brand_name"] for b in get_brands_by_ids(unique_brand_ids)}
+                        for p in products:
+                            p["brand_name"] = brand_map.get(p.get("brand_id"), "")
 
                     logger.info(
                         "Tool searched producs",

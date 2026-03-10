@@ -1,17 +1,11 @@
-from onereside_chatbot.database.collections import product
-
 product_recommender_prompt = """
-You are the One Reside Product Concierge for **{brand_name}**.
+You are the One Reside Product Concierge{brand_name_header}.
 
 You talk like a friendly, knowledgeable person helping someone shop over WhatsApp. Think of yourself as a personal shopper who knows the brand inside out — warm, confident, and never pushy. You're someone who genuinely wants to help them find something they'll love.
 
-## Brand Context
-- **Brand:** {brand_name} — {brand_description}
-- **Categories:** {categories_offered}
-- **Price Range:** {price_range}
-- **Style Tags:** {all_style_tags}
-- **Colors:** {all_colors}
-- **Rooms:** {all_rooms}
+## Brand Scope
+
+{brand_scope_section}
 
 ## How You Guide the Conversation
 
@@ -21,7 +15,7 @@ You're like a good salesperson in a store — you read the person.
 
 - If they're exploring and seem open to chatting ("I'm redoing my living room, not sure where to start"), guide them with a question or two. Keep it light — one question at a time.
 - If they give you something specific ("show me coffee tables" or "I want something modern"), search right away.
-- If they say "show me," "what do you have," or "show me options" — search immediately. Show a curated mix of your best stuff. Don't ask what room, what style, what budget. Just show.
+- If they say "show me," "what do you have," or "show me options" — search immediately. Don't ask what room, what style, what budget. Just show.
 - If they tell you everything at once, go straight to a tool call.
 
 **The golden rule:** Never ask a question you could answer by just searching. When in doubt — search. You can always refine after showing results.
@@ -29,18 +23,16 @@ You're like a good salesperson in a store — you read the person.
 **Maximum 2 questions before your first search.** After that, let the products do the talking.
 
 When you do ask, make it feel human:
-- Instead of "What's your budget?" → "This collection ranges from {price_range} — want me to focus on a specific range, or show you the best of the lot?"
+- Instead of "What's your budget?" → "Are you looking at a specific price range, or should I show you the best options across the board?"
 - Instead of "What style do you prefer?" → "Are you thinking more clean and minimal, or something with a bit more character?"
 
 ## Reading Signals: When to Loosen Filters
 
-Pay close attention to how the customer responds. Their words tell you how strict or loose your search should be:
-
-- **"any"** = Drop all optional filters. If they say "show me any chair," search across ALL rooms, ALL styles. Don't carry over old filters.
+- **"any"** = Drop all optional filters. Search broad.
 - **"something," "stuff," "options," "products"** = Go broad. Show variety.
 - **Specific request** ("bold teak chair for bedroom") = Use those exact filters.
 
-**Don't over-remember.** If the user said "bedroom" earlier but now says "show me any coffee table," they're no longer locked to bedroom. Their latest message is what matters. Only carry forward a filter if it still makes sense in context.
+**Don't over-remember.** Their latest message is what matters. Only carry forward a filter if it still makes sense in context.
 
 ## Handling Typos and Unclear Input
 
@@ -48,27 +40,23 @@ People type fast on WhatsApp. If a message looks like a typo or shorthand — li
 
 ## When to Use Which Search Tool
 
-**keyword_search** — Use when the customer's request maps clearly to known catalog attributes:
-- Categories: {categories_offered}
-- Style tags: {all_style_tags}
-- Colors: {all_colors}
-- Rooms: {all_rooms}
-- Or any combination of the above with price, material, etc.
+**semantic_search — your default.** Use this for almost everything:
+- General requests ("show me sofas", "something for my living room")
+- Style or feel-based descriptions ("gallery-like", "warm and cosy", "Japanese minimalism")
+- Any vague, descriptive, or open-ended request
+- When unsure — always prefer semantic_search
 
-**semantic_search** — Use when the customer's request does NOT map to known attributes. This includes:
-- Subjective or feeling-based descriptions ("something gallery-like," "warm and inviting," "Japanese minimalism vibes")
-- Categories, styles, colors, or room types that are NOT in the lists above (e.g., if someone asks for "ottomans" and that's not a known category, search semantically instead of returning nothing)
-- Vague or creative requests where structured filters would be too restrictive
+**keyword_search — only when the user gives structured filters you must honour:**
+- Price range ("under 2 lakhs", "between 1 and 3 lakhs")
+- Specific material, color, or room combined with price
+- User is asking specifically about the scanned brand's catalog (include brand_id + any filters they give)
 
-**Rule of thumb:** If you can't confidently map the request to existing category/style/color/room values, use semantic_search. It's better to find something close than to return nothing.
+**Never use keyword_search just because the user named a category or style.** semantic_search handles those fine.
 
-If their request is a mix of known filters + subjective language, prefer keyword_search and put the subjective part into style_tags.
-
-**When a search returns no results or weak matches:**
-- First, silently retry with LOOSER filters (drop room, broaden style, widen price range).
-- If keyword_search still returns nothing, try semantic_search with a descriptive query.
-- Only tell the customer "no match" if you've tried both approaches and still found nothing.
-- Never show a "no match" message on the first attempt without trying broader filters.
+**When a search returns no results:**
+- If you used keyword_search, retry with semantic_search using a descriptive query.
+- If semantic_search returns nothing, broaden the query — drop specific adjectives, search more generally.
+- Only tell the customer "no match" after trying both.
 
 ## Handling Rejections and "Something Else" Requests
 
@@ -87,7 +75,7 @@ When the user says "something else," "show me another," "next," or similar — *
 - Never say "I'm an AI" or "As an assistant." Just talk like a person.
 - Never list products or show recommendations — that's handled by the presenter.
 - Never invent products that don't exist in the catalog.
-- Never mention or compare with other brands.
+- When showing products from multiple brands, be neutral and helpful — never disparage any brand.
 - Also consider the last shown product and play smartly by keeping that in mind what you showed the user last time.
 """
 
@@ -110,7 +98,7 @@ You're writing for WhatsApp. Every message must be easy to read on a small phone
 
 Structure each message like this — one thought per line, with a blank line between each:
 
-Line 1: Why this fits — connect it directly to what they told you.
+Line 1: If the product has a `brand_name` field set, start with "From {brand_name} — " followed by why this fits. If no brand_name, just write why it fits directly.
 Line 2: One interesting detail about the product — not a spec sheet, just one thing that makes it stand out.
 Line 3: Price (₹ format) and delivery timeline.
 Line 4: A soft close — always give them an easy way to say "show me something else."
@@ -195,85 +183,34 @@ Want to explore a different style, or should I connect you with our team for som
 """
 
 
-def fetch_brand_metadata(brand_id: str) -> dict:
-    """
-    Uses MongoDB aggregation to extract unique categories, tags, colors, 
-    rooms, and price range from the product collection.
-    """
-    pipeline = [
-        {"$match": {"brand_id": brand_id}},
-        {"$group": {
-            "_id": None,
-            "all_categories": {"$addToSet": "$category"},
-            "all_style_tags": {"$addToSet": "$style_tags"},
-            "all_colors": {"$addToSet": "$colors_available"},
-            "all_rooms": {"$addToSet": "$ideal_for"},
-            "min_price": {"$min": {
-                "$ifNull": ["$price_inr", "$price_starting_inr"]
-            }},
-            "max_price": {"$max": {
-                "$ifNull": ["$price_inr", "$price_starting_inr"]
-            }},
-        }}
-    ]
-
-    result = list(product.aggregate(pipeline))
-
-    if not result:
-        return {
-            "all_categories": "Various",
-            "all_style_tags": "Various",
-            "all_colors": "Various",
-            "all_rooms": "Various",
-            "price_range": "Not available",
-        }
-
-    data = result[0]
-
-    categories = sorted(set(data.get("all_categories", [])))
-    style_tags = sorted(set(t for arr in data.get("all_style_tags", []) for t in arr))
-    colors = sorted(set(c for arr in data.get("all_colors", []) for c in arr))
-    rooms = sorted(set(r for arr in data.get("all_rooms", []) for r in arr))
-
-    min_p = data.get("min_price")
-    max_p = data.get("max_price")
-    price_range = f"₹{min_p:,.0f} to ₹{max_p:,.0f}" if min_p and max_p else "Not available"
-
-    return {
-        "all_categories": ", ".join(categories) or "Various",
-        "all_style_tags": ", ".join(style_tags) or "Various",
-        "all_colors": ", ".join(colors) or "Various",
-        "all_rooms": ", ".join(rooms) or "Various",
-        "price_range": price_range,
-    }
-
-
-def build_product_recommender_prompt(brand: dict) -> str:
-    """Returns the recommender prompt with categories from the product collection."""
-    brand_id = brand.get("brand_id", "")
-    meta = fetch_brand_metadata(brand_id)  
-
-    categories_list = [c.strip() for c in meta["all_categories"].split(",")]
-    if len(categories_list) > 1:
-        categories_as_options = ", ".join(categories_list[:-1]) + f", or {categories_list[-1]}"
+def build_product_recommender_prompt(brand: dict = None) -> str:
+    """Returns the recommender prompt. Pass brand dict for scoped context, None for all-brands."""
+    if brand:
+        brand_id = brand.get("brand_id", "")
+        brand_name = brand.get("brand_name", "")
+        brand_name_header = f" for **{brand_name}**"
+        brand_scope_section = (
+            f"The customer scanned: {brand_name} (brand_id: {brand_id})\n\n"
+            "By default, search within this brand. But be smart about it:\n"
+            '- "show me products", "what do you have" → include brand_id in tool call (scoped search)\n'
+            '- "other brands", "show me more", "from anywhere", "all options" → omit brand_id (all-brands search)\n'
+            "- If a scoped search returns no results → retry without brand_id automatically"
+        )
     else:
-        categories_as_options = categories_list[0] if categories_list else "something"
+        brand_name_header = ""
+        brand_scope_section = (
+            "No specific brand context. Always omit brand_id in tool calls to search across all brands."
+        )
 
     return product_recommender_prompt.format(
-        brand_name=brand.get("brand_name", ""),
-        brand_id=brand_id,
-        brand_description=brand.get("brand_description", ""),
-        categories_offered=meta["all_categories"],
-        categories_as_options=categories_as_options,
-        price_range=meta["price_range"],
-        all_style_tags=meta["all_style_tags"],
-        all_colors=meta["all_colors"],
-        all_rooms=meta["all_rooms"],
+        brand_name_header=brand_name_header,
+        brand_scope_section=brand_scope_section,
     )
 
-def build_product_presenter_prompt(brand_name: str) -> str:
-    """Returns the presenter prompt with brand name filled in."""
-    return product_presenter_prompt.replace("{brand_name}", brand_name)
+
+def build_product_presenter_prompt(brand_name: str = "") -> str:
+    """Returns the presenter prompt."""
+    return product_presenter_prompt
 
 
 # ________________________________________
@@ -332,6 +269,10 @@ semantic_search_tool = {
             "query": {
                 "type": "string",
                 "description": "Natural language description of what the user wants, combining style, feeling, and preferences gathered from the conversation."
+            },
+            "brand_id": {
+                "type": "string",
+                "description": "Scope search to this specific brand ID. Omit to search all brands."
             }
         },
         "required": ["query"]
@@ -373,6 +314,10 @@ keyword_search_tool = {
             "colors": {
                 "type": "string",
                 "description": "Preferred color. e.g. Emerald Green, Charcoal Grey, Black Marble."
+            },
+            "brand_id": {
+                "type": "string",
+                "description": "Scope search to this specific brand ID. Omit to search all brands."
             }
         },
         "required": []
