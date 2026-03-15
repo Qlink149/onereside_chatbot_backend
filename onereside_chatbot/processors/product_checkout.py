@@ -27,20 +27,67 @@ class ProductCheckoutAgent(Processor):
 
                     payload = json.loads(button_details.get("id"))
                     msgid = payload.get("msgid")
+                    button_title = button_details.get("title")
 
-                    ids = msgid.split("_")
+                    if msgid.startswith("buy"):
+                        ids = msgid.split("$")
 
-                    if ids[0] == "buy":
-                        prod_name = ids[1]
+                        prod_id = ids[1]
+                        
+                        user_profile["selected_product_id"] = prod_id
 
-                        data["bot_response"] = [
-                            {
-                                "type": "text",
-                                "text": f"Product Purchase flow {prod_name}.",
+                        if user_profile.get("address"):
+                            data["bot_response"] = [
+                               {
+                                    "type": "quickreply",
+                                    "text": f"Do you want to continue with this address, \n{
+                                        user_profile["address"]
+                                    }",
+                                    "caption": "Click the edit to edit the address.",
+                                    "options": [{"title": "Continue"}, {"title": "Edit Address"}],
+                                    "msgid": "address_confirmation",
+                                } 
+                            ]
+                        else:
+                            data["bot_response"] = [
+                                {
+                                    "type": "text",
+                                    "text": f"Adress Flow.",
+                                }
+                            ]
+                            user_profile["address"] = {
+                                "draft": True
                             }
-                        ]
+
+                    elif msgid == "address_confirmation":
+                        if button_title == "Continue":
+                            data["bot_response"] = [
+                               {
+                                    "type": "cta_url",
+                                    "text": f"Pls use the link to pay",
+                                    "display_text": "pay now.",
+                                    "url": "https://www.google.com/",
+                                } 
+                            ]
+                            user_profile["service_selected"] = ""
+                            user_profile["selected_product_id"] = ""
+                        else:
+                            data["bot_response"] = [
+                                {
+                                    "type": "text",
+                                    "text": f"Adress Flow.",
+                                }
+                            ]
+
+
+                        # data["bot_response"] = [
+                        #     {
+                        #         "type": "text",
+                        #         "text": f"Product Purchase flow {prod_name}.",
+                        #     }
+                        # ]
  
-            data["service_selected"] = ""
+            
             return data
         
         except Exception as e:

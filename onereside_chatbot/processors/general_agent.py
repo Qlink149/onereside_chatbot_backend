@@ -80,7 +80,7 @@ class GeneralAgent(Processor):
                     )
 
                 data["bot_response"] = bot_response
-                data["service_selected"] = ""
+                user_profile["service_selected"] = ""
 
 
             return data

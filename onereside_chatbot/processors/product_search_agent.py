@@ -240,7 +240,7 @@ class ProductAgent(Processor):
                                     "text": presenter_output.get("message", ""),
                                     "caption": "Click the cta to buy the product.",
                                     "options": [{"title": "Buy"}],
-                                    "msgid": f"buy_{presenter_output['product_id']}",
+                                    "msgid": f"buy${presenter_output['product_id']}",
                                 }
                             )
                     else:
@@ -252,7 +252,7 @@ class ProductAgent(Processor):
                         )
 
                     data["bot_response"] = bot_response
-                    data["service_selected"] = ""
+                    user_profile["service_selected"] = ""
                     return data
 
                 else:
@@ -264,7 +264,7 @@ class ProductAgent(Processor):
                     output = json.loads(output_text)
 
                     data["bot_response"] = [{"type": "text", "text": output.get("message", "")}]
-                    data["service_selected"] = ""
+                    user_profile["service_selected"] = ""
                     return data
 
         except Exception as e:
