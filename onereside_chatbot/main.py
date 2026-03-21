@@ -1,11 +1,17 @@
 
-from fastapi import APIRouter, FastAPI
+import hashlib
+import hmac
+import json
+
+from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.requests import Request
 
 from onereside_chatbot.database.db_utils import (
-    save_to_mongo
+    save_to_mongo,
+    save_payment,
+    update_order_by_payment_link_id,
 )
+from onereside_chatbot.utils.env_load import razorpay_webhook_secrete
 from onereside_chatbot.models.service_list import ServiceList
 from onereside_chatbot.pipelines.inference_pipeline import (
     InitialPipeline,
@@ -35,6 +41,71 @@ app.add_middleware(
 )
 
 api_router = APIRouter(prefix="/api/v1")
+
+
+@app.post("/razorpay/webhook")
+async def razorpay_webhook(request: Request):
+    """Razorpay webhook endpoint to capture payment events."""
+    body = await request.body()
+    signature = request.headers.get("X-Razorpay-Signature", "")
+
+    # Verify webhook signature
+    expected_signature = hmac.new(
+        razorpay_webhook_secrete.encode("utf-8"),
+        body,
+        hashlib.sha256,
+    ).hexdigest()
+
+    if not hmac.compare_digest(expected_signature, signature):
+        logger.warning("Razorpay webhook signature mismatch")
+        raise HTTPException(status_code=400, detail="Invalid signature")
+
+    payload = json.loads(body)
+    event = payload.get("event", "")
+    logger.info("Razorpay webhook received", extra={"event": event})
+
+    rz_payload = payload.get("payload", {})
+
+    PAYMENT_LINK_EVENTS = {"payment_link.paid", "payment_link.cancelled", "payment_link.expired"}
+
+    if event in PAYMENT_LINK_EVENTS:
+        payment_link_entity = rz_payload.get("payment_link", {}).get("entity", {})
+        payment_link_id = payment_link_entity.get("id")
+
+        # Base update — applies to all payment link events
+        order_update = {
+            "payment_event": event,
+            "payment_status": payment_link_entity.get("status"),
+        }
+
+        if event == "payment_link.paid":
+            payment_entity = rz_payload.get("payment", {}).get("entity", {})
+            payment_id = payment_entity.get("id")
+            save_payment({
+                "payment_id": payment_id,
+                "payment_link_id": payment_link_id,
+                "event": event,
+                "amount": payment_entity.get("amount"),
+                "currency": payment_entity.get("currency"),
+                "status": payment_entity.get("status"),
+                "method": payment_entity.get("method"),
+                "email": payment_entity.get("email"),
+                "contact": payment_entity.get("contact"),
+                "captured": payment_entity.get("captured"),
+                "raw_payload": payload,
+            })
+            order_update.update({
+                "razorpay_payment_id": payment_id,
+                "payment_method": payment_entity.get("method"),
+            })
+
+        if payment_link_id:
+            update_order_by_payment_link_id(
+                payment_link_id=payment_link_id,
+                update_data=order_update,
+            )
+
+    return {"status": "ok"}
 
 
 @app.get("/ping")
@@ -158,6 +229,7 @@ async def messages(data: Request):
         ]
         save_to_mongo(data=data)
         response_manager.handle_responses(data=data)
+
 
 
 

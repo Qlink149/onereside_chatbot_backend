@@ -1,8 +1,9 @@
+import json
+
 from onereside_chatbot.processors.abstract_processor import Processor
 from onereside_chatbot.utils.logger_config import logger
-from onereside_chatbot.prompt.general_agent import build_general_agent_prompt, output_schema
-from onereside_chatbot.utils.get_openai_client import openai_client
-import json
+from onereside_chatbot.database.db_utils import get_product_by_id, save_order
+from onereside_chatbot.utils.razorpay_utils import create_payment_link
 
 class ProductCheckoutAgent(Processor):
     """Search a product checkout query."""
@@ -34,7 +35,19 @@ class ProductCheckoutAgent(Processor):
 
                         prod_id = ids[1]
                         
-                        user_profile["selected_product_id"] = prod_id
+                        product = user_profile["selected_product_id"] = get_product_by_id(product_id=prod_id)
+
+                        if product and not product.get("price_inr"):
+                            data["bot_response"] = [
+                               {
+                                    "type": "text",
+                                    "text": "NULL Price Flow.",
+                                } 
+                            ]
+                            user_profile["service_selected"] = ""
+                            user_profile["selected_product_id"] = {}
+                            return data
+
 
                         if user_profile.get("address"):
                             data["bot_response"] = [
@@ -60,17 +73,43 @@ class ProductCheckoutAgent(Processor):
                             }
 
                     elif msgid == "address_confirmation":
+                        selected_prod = user_profile.get("selected_product_id")
+
                         if button_title == "Continue":
+                            amount_inr = selected_prod.get("price_inr", 0)
+                            amount_paise = int(amount_inr * 100)
+
+                            payment_link_response = create_payment_link(
+                                amount=amount_paise,
+                                phone=phone_number,
+                                name=username,
+                                description=f"Order for {selected_prod.get('name', '')}",
+                            )
+
+                            order_doc = {
+                                "phone_number": phone_number,
+                                "username": username,
+                                "product": selected_prod,
+                                "address": user_profile.get("address"),
+                                "amount_inr": amount_inr,
+                                "amount_paise": amount_paise,
+                                "payment_link_id": payment_link_response.get("id"),
+                                "payment_short_url": payment_link_response.get("short_url"),
+                                "razorpay_payment_id": None,
+                                "payment_status": "pending",
+                            }
+                            save_order(order_doc)
+
                             data["bot_response"] = [
                                {
                                     "type": "cta_url",
-                                    "text": f"Pls use the link to pay",
-                                    "display_text": "pay now.",
-                                    "url": "https://www.google.com/",
-                                } 
+                                    "text": f"Click below to complete your payment of ₹{amount_inr} for {selected_prod.get('name', 'your order')}.",
+                                    "display_text": "Pay Now",
+                                    "url": payment_link_response.get("short_url"),
+                                }
                             ]
                             user_profile["service_selected"] = ""
-                            user_profile["selected_product_id"] = ""
+                            user_profile["selected_product_id"] = {}
                         else:
                             data["bot_response"] = [
                                 {

@@ -9,6 +9,10 @@ pims_calls = db["pims_calls"]
 pims_systems = db["pims_systems"]
 
 
-company = db["company"] 
-product = db["product"] 
+company = db["company"]
+product = db["product"]
 idac = db["users"]
+
+payments = db["payments"]
+orders = db["orders"]
+refunds = db["refunds"]

@@ -29,3 +29,7 @@ futwork_pacific_agent = os.environ.get("FUTWORK_PACIFIC_AGENT")
 
 chroma_api = os.getenv("CHROMA_API_KEY")
 chorma_tenant = os.getenv("CHROMA_TENANT")
+
+razorpay_webhook_secrete = os.getenv("RAZORPAY_WEBHOOK_SECRET")
+razorpay_app_id = os.getenv("RAZORPAY_APP_ID")
+razorpay_app_secrete = os.getenv("RAZORPAY_APP_SECRETE")

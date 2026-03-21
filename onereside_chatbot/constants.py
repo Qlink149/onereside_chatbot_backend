@@ -31,3 +31,5 @@ AWAZ_SOURCE = "+12315005708"
 CALLCHIMP_ROUTE = "https://api.callchimp.ai/v1"
 
 TEXT_EMBEDDING_MODEL = "text-embedding-3-small"
+
+RAZORPAY_REDIRECT = "https://wa.me/919594923839"

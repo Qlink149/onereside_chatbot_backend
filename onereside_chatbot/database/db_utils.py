@@ -8,7 +8,9 @@ from pymongo import ReturnDocument
 from onereside_chatbot.database.collections import (
     idac,
     company,
-    product
+    product,
+    payments,
+    orders,
 )
 from onereside_chatbot.utils.format_chathistory import format_chat_history
 from onereside_chatbot.utils.logger_config import logger
@@ -207,6 +209,89 @@ def get_catalog_metadata() -> dict:
     except Exception as e:
         logger.exception("Failed to fetch catalog metadata.")
         return {"categories": [], "style_tags": [], "ideal_for": []}
+
+
+def save_order(order_data: dict) -> str:
+    """Save a new order to the orders collection. Returns the inserted order _id as string."""
+    try:
+        order_data["created_at"] = int(time.time())
+        order_data["updated_at"] = int(time.time())
+        result = orders.insert_one(order_data)
+        logger.info(
+            "Order saved successfully",
+            extra={"inserted_id": str(result.inserted_id)},
+        )
+        return str(result.inserted_id)
+    except Exception as e:
+        logger.exception("Failed to save order.", extra={"exception": e})
+        raise e
+
+
+def save_payment(payment_data: dict) -> dict:
+    """Save Razorpay payment details to the payments collection."""
+    try:
+        payment_data["created_at"] = int(time.time())
+        result = payments.insert_one(payment_data)
+        logger.info(
+            "Payment saved successfully",
+            extra={"payment_id": payment_data.get("payment_id"), "inserted_id": str(result.inserted_id)},
+        )
+        return {"inserted_id": str(result.inserted_id)}
+    except Exception as e:
+        logger.exception("Failed to save payment.", extra={"exception": e})
+        raise e
+
+
+def update_order_by_payment_link_id(payment_link_id: str, update_data: dict) -> dict | None:
+    """Find an order by payment_link_id and update it."""
+    try:
+        update_data["updated_at"] = int(time.time())
+        result = orders.find_one_and_update(
+            {"payment_link_id": payment_link_id},
+            {"$set": update_data},
+            return_document=ReturnDocument.AFTER,
+        )
+        if result:
+            result.pop("_id", None)
+            logger.info(
+                "Order updated by payment_link_id successfully",
+                extra={"payment_link_id": payment_link_id},
+            )
+        else:
+            logger.warning(
+                "No order found with given payment_link_id",
+                extra={"payment_link_id": payment_link_id},
+            )
+        return result
+    except Exception as e:
+        logger.exception("Failed to update order by payment_link_id.", extra={"exception": e, "payment_link_id": payment_link_id})
+        raise e
+
+
+def update_order_by_payment_id(payment_id: str, update_data: dict) -> dict | None:
+    """Find an order by razorpay_payment_id and update it."""
+    try:
+        update_data["updated_at"] = int(time.time())
+        result = orders.find_one_and_update(
+            {"razorpay_payment_id": payment_id},
+            {"$set": update_data},
+            return_document=ReturnDocument.AFTER,
+        )
+        if result:
+            result.pop("_id", None)
+            logger.info(
+                "Order updated successfully",
+                extra={"payment_id": payment_id},
+            )
+        else:
+            logger.warning(
+                "No order found with given payment_id",
+                extra={"payment_id": payment_id},
+            )
+        return result
+    except Exception as e:
+        logger.exception("Failed to update order.", extra={"exception": e, "payment_id": payment_id})
+        raise e
 
 
 def get_product_by_id(product_id: str):
