@@ -18,7 +18,7 @@ import json
 
 # Fields sent to the presenter not full docs
 PRESENTER_FIELDS = {
-    "product_id", "name", "price_inr", "brand_id", "category",
+    "product_id", "name", "price_inr", "brand_id", "brand_name", "category",
     "style_tags", "ideal_for", "materials", "colors_available",
     "description", "delivery_timeline",
 }
@@ -242,8 +242,10 @@ class ProductAgent(Processor):
                     )
 
                     # Presenter call — trimmed docs only
+                    scanned_brand_name = brand.get("brand_name", "") if brand else "None"
                     presenter_messages = [
                         {"role": "system", "content": f"Username: {username}"},
+                        {"role": "system", "content": f"Customer's scanned brand: {scanned_brand_name}"},
                         {"role": "system", "content": f"Recent chat history:\n{chat_history_str}"},
                         {"role": "system", "content": f"Search results: {json.dumps(_trim_for_presenter(products))}"},
                         {"role": "system", "content": f"Last Shown Product: {user_profile.get('last_shown_product', '')}"},
