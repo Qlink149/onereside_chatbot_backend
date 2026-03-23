@@ -217,6 +217,8 @@ async def messages(data: Request):
             save_to_mongo(data=data)
             response_manager.handle_responses(data=data)
 
+        return {"success": True}
+
     except Exception as e:
         logger.exception(
             "Exception occured while running message endpoint",
@@ -230,6 +232,7 @@ async def messages(data: Request):
         ]
         save_to_mongo(data=data)
         response_manager.handle_responses(data=data)
+        return {"success": True}
 
 
 
