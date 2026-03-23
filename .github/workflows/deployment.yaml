@@ -69,6 +69,9 @@ jobs:
               -e GUPSHUP_API_KEY=${{ secrets.GUPSHUP_API_KEY }} \
               -e CHROMA_API_KEY=${{ secrets.CHROMA_API_KEY }} \
               -e CHROMA_TENANT=${{ secrets.CHROMA_TENANT }} \
+              -e RAZORPAY_WEBHOOK_SECRET=${{ secrets.RAZORPAY_WEBHOOK_SECRET }} \
+              -e RAZORPAY_APP_ID=${{ secrets.RAZORPAY_APP_ID }} \
+              -e RAZORPAY_APP_SECRETE=${{ secrets.RAZORPAY_APP_SECRETE }} \
               sgp.vultrcr.com/qlink01/onereside_bot
 
       - name: Cleanup Old Images
