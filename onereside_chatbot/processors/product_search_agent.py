@@ -167,14 +167,14 @@ class ProductAgent(Processor):
 
                 while iteration < MAX_SEARCH_ITERATIONS:
                     response = await openai_client.responses.create(
-                        model="gpt-4.1-mini",
+                        model="gpt-5-mini",
                         instructions=product_recommender_prompt,
                         input=current_messages,
                         tools=[search_products_tool, get_product_by_id_tool],
                         tool_choice="auto",
                         parallel_tool_calls=False,
                         text=output_schema,
-                        max_output_tokens=400,
+                        max_output_tokens=2000,
                     )
 
                     logger.info(
@@ -191,8 +191,9 @@ class ProductAgent(Processor):
                         elif item.type == "message":
                             text_message = item
 
-                    if not tool_call:
-                        break  # clarifying question — exit loop
+                    # If the model wrote a conversational message, show it — even if it also made a tool call
+                    if text_message:
+                        break
 
                     args = json.loads(tool_call.arguments)
                     is_new_topic = args.get("is_new_topic", False)
@@ -258,7 +259,7 @@ class ProductAgent(Processor):
                     ]
 
                     presenter_response = await openai_client.responses.create(
-                        model="gpt-4.1-mini",
+                        model="gpt-4o-mini",
                         instructions=product_presenter_prompt,
                         input=presenter_messages,
                         text=presenter_output_schema,
@@ -320,9 +321,12 @@ class ProductAgent(Processor):
                     return data
 
                 else:
-                    # Recommender asked a clarifying question (no tool call)
-                    if not text_message or text_message.type != "message":
-                        raise ValueError("Model did not return a final message")
+                    # Recommender asked a clarifying question (no tool call, has message)
+                    if not text_message:
+                        logger.warning("Recommender returned no message and no tool call", extra={"phone_number": phone_number})
+                        data["bot_response"] = [{"type": "text", "text": "Give me a sec, let me look that up for you."}]
+                        user_profile["service_selected"] = ""
+                        return data
 
                     output_text = text_message.content[0].text
                     output = json.loads(output_text)

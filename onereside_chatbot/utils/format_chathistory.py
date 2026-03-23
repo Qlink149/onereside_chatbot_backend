@@ -27,8 +27,15 @@ def format_assistant(assistant_message, phone_number):
             elif message_type == "flow":
                 body += f"\nSent flow - [{assistant['flow']}]"
 
-            elif message_type == "quick_reply":
-                body += f"\nSent Quick Reply - [{assistant['msgid']}]: \n{assistant['text']}"
+            elif message_type in ("quick_reply", "quickreply"):
+                option_titles = ", ".join(opt["title"] for opt in assistant.get("options", []))
+                body += f"{assistant['text']}"
+                if option_titles:
+                    body += f"\n[Options: {option_titles}]"
+
+            elif message_type == "media":
+                caption = assistant.get("caption", "")
+                body += f"\nShowed product image - [{caption}]" if caption else "\nShowed product image"
 
             elif message_type == "text":
                 body += f"{assistant['text']}"
