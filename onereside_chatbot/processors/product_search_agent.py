@@ -171,6 +171,8 @@ class ProductAgent(Processor):
                         instructions=product_recommender_prompt,
                         input=current_messages,
                         tools=[search_products_tool, get_product_by_id_tool],
+                        tool_choice="auto",
+                        parallel_tool_calls=False,
                         text=output_schema,
                         max_output_tokens=400,
                     )
