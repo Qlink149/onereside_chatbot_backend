@@ -45,6 +45,7 @@ def send_audio_message(phone_number: str, bot_response: dict):
                 "response": response.json(),
             },
         )
+        return response.json()
     except Exception as e:
         logger.error(
             "Error in sending audio message",

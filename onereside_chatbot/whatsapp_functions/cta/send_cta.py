@@ -53,6 +53,7 @@ def send_cta_url(phone_number, bot_response):
                 "response": response.json(),
             },
         )
+        return response.json()
     except Exception as e:
         logger.error(
             "Error while sending url cta",

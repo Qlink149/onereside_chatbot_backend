@@ -55,6 +55,7 @@ def send_site_visit_flow(phone_number: str):
     try:
         response = httpx.post(url, headers=headers, json=data)
         logger.info("Response", extra={"response": response.json()})
+        return response.json()
     except Exception as e:
         logger.error("Error in sending spot booking flow", extra={"error": e})
         raise e

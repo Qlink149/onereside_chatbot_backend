@@ -49,6 +49,7 @@ def send_quickreply(phone_number, bot_response):
                 "response": response.json(),
             },
         )
+        return response.json()
     except Exception as e:
         logger.error(
             "Error while sending postcall quick reply",

@@ -44,6 +44,7 @@ def send_text_message(phone_number: str, bot_response: str):
                 "response": response.json(),
             },
         )
+        return response.json()
     except Exception as e:
         logger.error(
             "Error in sending text message",

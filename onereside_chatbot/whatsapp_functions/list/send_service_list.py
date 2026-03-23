@@ -87,5 +87,6 @@ def send_service_list(phone_number):
             "Response from Gupshup API for sending service list",
             extra={"response": response.json()},
         )
+        return response.json()
     except Exception as e:
         logger.error("Error in sending list", extra={"error": e})
