@@ -6,6 +6,7 @@ from onereside_chatbot.prompt.product_search import (
     output_schema,
     presenter_output_schema,
     search_products_tool,
+    get_product_by_id_tool,
 )
 from onereside_chatbot.utils.get_openai_client import openai_client
 from onereside_chatbot.database.collections import product as pd
@@ -15,7 +16,7 @@ from onereside_chatbot.database.db_utils import get_product_by_id, get_brands_by
 import json
 
 
-# Fields sent to the presenter — enough for good recommendations, not full docs
+# Fields sent to the presenter not full docs
 PRESENTER_FIELDS = {
     "product_id", "name", "price_inr", "brand_id", "category",
     "style_tags", "ideal_for", "materials", "colors_available",
@@ -61,8 +62,6 @@ class ProductAgent(Processor):
                     return []
 
                 q = {"product_id": {"$in": filtered_ids}}
-                if category:
-                    q["category"] = category
                 if price_min > 0 or (0 < price_max < 10_000_000):
                     price_filter = {}
                     if price_min > 0:
@@ -73,7 +72,12 @@ class ProductAgent(Processor):
                         {"price_inr": price_filter},
                         {"price_inr": None},
                     ]
-                return list(pd.find(q, {"_id": 0, "media_url": 0}).limit(3))
+                # Fetch all matches, then re-sort by semantic relevance order and take top 3
+                # MongoDB $in does NOT preserve order — without this, irrelevant products surface first
+                order = {pid: i for i, pid in enumerate(filtered_ids)}
+                docs = list(pd.find(q, {"_id": 0, "media_url": 0}))
+                docs.sort(key=lambda p: order.get(p["product_id"], 999))
+                return docs[:3]
 
             # Step 1: search within brand (if brand_id provided)
             product_ids = semantic_search(
@@ -118,8 +122,8 @@ class ProductAgent(Processor):
         try:
             if "text" in data["messages"]:
                 user_query = data["messages"]["text"]["body"]
-                shown_ids = user_profile.get("shown_product_ids", [])
-                exclude_ids = shown_ids[-5:] if shown_ids else []
+                shown_products = user_profile.get("shown_products", [])
+                exclude_ids = [p["product_id"] for p in shown_products[-5:]] if shown_products else []
 
                 # Fetch catalog metadata for prompt injection
                 catalog_metadata = get_catalog_metadata()
@@ -138,44 +142,87 @@ class ProductAgent(Processor):
                     for c in chat_history
                 )
 
+                shown_products_summary = (
+                    json.dumps([{"product_id": p["product_id"], "name": p["name"]} for p in shown_products[-10:]])
+                    if shown_products else "[]"
+                )
+
                 messages = [
                     {"role": "system", "content": f"Username: {username}"},
                     {"role": "system", "content": f"Recent chat history:\n{chat_history_str}"},
                     {"role": "system", "content": f"Last Shown Product: {user_profile.get('last_shown_product', '')}"},
+                    {"role": "system", "content": f"All previously shown products (use product_id to fetch any of them): {shown_products_summary}"},
                     {"role": "user", "content": user_query},
                 ]
 
-                # Recommender call
-                response = await openai_client.responses.create(
-                    model="gpt-4.1-mini",
-                    instructions=product_recommender_prompt,
-                    input=messages,
-                    tools=[search_products_tool],
-                    text=output_schema,
-                    max_output_tokens=200,
-                )
-
-                logger.info(
-                    "Recommender response",
-                    extra={"response": response.model_dump(), "phone_number": phone_number},
-                )
-
+                # Recommender loop — max 2 search iterations for self-correction
+                MAX_SEARCH_ITERATIONS = 2
+                iteration = 0
+                products = []
+                is_new_topic = False
+                is_reshow = False
                 tool_call = None
                 text_message = None
+                current_messages = messages
 
-                for item in response.output:
-                    if item.type == "function_call":
-                        tool_call = item
-                    elif item.type == "message":
-                        text_message = item
+                while iteration < MAX_SEARCH_ITERATIONS:
+                    response = await openai_client.responses.create(
+                        model="gpt-4.1-mini",
+                        instructions=product_recommender_prompt,
+                        input=current_messages,
+                        tools=[search_products_tool, get_product_by_id_tool],
+                        text=output_schema,
+                        max_output_tokens=400,
+                    )
 
-                if tool_call:
+                    logger.info(
+                        "Recommender response",
+                        extra={"response": response.model_dump(), "phone_number": phone_number, "iteration": iteration + 1},
+                    )
+
+                    tool_call = None
+                    text_message = None
+
+                    for item in response.output:
+                        if item.type == "function_call":
+                            tool_call = item
+                        elif item.type == "message":
+                            text_message = item
+
+                    if not tool_call:
+                        break  # clarifying question — exit loop
+
                     args = json.loads(tool_call.arguments)
+                    is_new_topic = args.get("is_new_topic", False)
 
-                    logger.info("Tool invoked", extra={"arguments": args})
+                    logger.info("Tool invoked", extra={"tool": tool_call.name, "arguments": args, "iteration": iteration + 1})
+
+                    if tool_call.name == "get_product_by_id":
+                        product = get_product_by_id(product_id=args["product_id"])
+                        products = [product] if product else []
+                        is_reshow = True
+                        iteration += 1
+                        break  # direct fetch — no need to loop
 
                     products = self.handle_search(args, exclude_ids)
+                    iteration += 1
 
+                    if len(products) >= 2 or iteration >= MAX_SEARCH_ITERATIONS:
+                        break
+
+                    # Feed back only count + hint — never product details, to prevent recommender hallucination
+                    current_messages = current_messages + list(response.output) + [
+                        {
+                            "type": "function_call_output",
+                            "call_id": tool_call.call_id,
+                            "output": json.dumps({
+                                "results_count": len(products),
+                                "hint": "Too few results — try a broader query or drop the category/brand_id filter to widen the search." if len(products) < 2 else "ok",
+                            }),
+                        }
+                    ]
+
+                if tool_call:
                     # Enrich with brand_name
                     unique_brand_ids = list({p["brand_id"] for p in products if p.get("brand_id")})
                     if unique_brand_ids:
@@ -188,12 +235,21 @@ class ProductAgent(Processor):
                         extra={"products": json.dumps(_trim_for_presenter(products))},
                     )
 
+                    # Build shown history summary for presenter context
+                    shown_summary = (
+                        "Previously shown to this customer: " + ", ".join(p["name"] for p in shown_products[-5:])
+                        if shown_products else "Nothing shown yet."
+                    )
+
                     # Presenter call — trimmed docs only
                     presenter_messages = [
                         {"role": "system", "content": f"Username: {username}"},
                         {"role": "system", "content": f"Recent chat history:\n{chat_history_str}"},
                         {"role": "system", "content": f"Search results: {json.dumps(_trim_for_presenter(products))}"},
                         {"role": "system", "content": f"Last Shown Product: {user_profile.get('last_shown_product', '')}"},
+                        {"role": "system", "content": shown_summary},
+                        {"role": "system", "content": f"Is new topic: {is_new_topic}. {'Treat this as a fresh first recommendation — ignore prior rejections in chat history.' if is_new_topic else ''}"},
+                        {"role": "system", "content": f"Is re-show: {is_reshow}. {'The customer asked to see this product again — show it as requested, acknowledge it naturally.' if is_reshow else ''}"},
                         {"role": "user", "content": user_query},
                     ]
 
@@ -202,7 +258,7 @@ class ProductAgent(Processor):
                         instructions=product_presenter_prompt,
                         input=presenter_messages,
                         text=presenter_output_schema,
-                        max_output_tokens=200,
+                        max_output_tokens=400,
                     )
 
                     logger.info(
@@ -216,10 +272,14 @@ class ProductAgent(Processor):
                     bot_response = []
 
                     if presenter_output.get("product_id"):
-                        user_profile.setdefault("shown_product_ids", []).append(presenter_output["product_id"])
                         product = get_product_by_id(product_id=presenter_output["product_id"])
 
                         if product:
+                            user_profile.setdefault("shown_products", []).append({
+                                "product_id": presenter_output["product_id"],
+                                "name": product.get("name", ""),
+                            })
+
                             if product.get("media_url"):
                                 for urls in product.get("media_url", []):
                                     bot_response.append(

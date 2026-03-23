@@ -192,7 +192,8 @@ async def messages(data: Request):
             user_profile = data["user_profile"]
 
             if user_profile["service_selected"] == ServiceList.GENERAL.value:
-                pipeline = GeneralPipeline()
+                # No brand scanned — route to One Reside agent instead of brand-specific general agent
+                pipeline = OneResidePipeline() if not data.get("brand") else GeneralPipeline()
                 
             elif (
                 user_profile["service_selected"]
