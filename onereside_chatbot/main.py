@@ -4,6 +4,7 @@ import hmac
 import json
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from onereside_chatbot.database.db_utils import (
@@ -217,7 +218,7 @@ async def messages(data: Request):
             save_to_mongo(data=data)
             response_manager.handle_responses(data=data)
 
-        return {"success": True}
+        return JSONResponse(content={"success": True}, status_code=200)
 
     except Exception as e:
         logger.exception(
@@ -232,7 +233,7 @@ async def messages(data: Request):
         ]
         save_to_mongo(data=data)
         response_manager.handle_responses(data=data)
-        return {"success": True}
+        return JSONResponse(content={"success": True}, status_code=200)
 
 
 
