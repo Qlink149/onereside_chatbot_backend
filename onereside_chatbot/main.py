@@ -3,7 +3,7 @@ import hashlib
 import hmac
 import json
 
-from fastapi import APIRouter, FastAPI, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -118,30 +118,13 @@ def ping():
 
 
 
-@app.post("/gupshup/message/onereside")
-async def messages(data: Request):
-    """Message endpoint to send a message to the chatbot."""
-    request_data = await data.json()
-    logger.info("Request received with data", extra={"data": request_data})
+async def process_message(request_data: dict):
+    """Process the incoming message in the background."""
+    phone_number = None
+    response_manager = ResponseManager()
 
     try:
-        if "payload" in request_data:
-            logger.info("Payload found in request data, ignoring it")
-            return None
-
         whatsapp_event = request_data["entry"][0]["changes"][0]["value"]
-
-        # logger.info("Whatsapp event", extra={"whatsapp_event": whatsapp_event})
-
-        if "statuses" in whatsapp_event:
-            if "type" in whatsapp_event["statuses"][0]:
-                status = whatsapp_event["statuses"][0]["type"]
-            else:
-                status = whatsapp_event["statuses"][0]["status"]
-            logger.info(
-                "Ignoring message with status", extra={"status": status}
-            )
-            return {"status": "success"}
 
         messages = whatsapp_event["messages"][0]
         phone_number = messages["from"]
@@ -152,8 +135,6 @@ async def messages(data: Request):
             if "contacts" in request_data["entry"][0]["changes"][0]["value"]
             else ""
         )
-
-        response_manager = ResponseManager()
 
         data = {
             "phone_number": phone_number,
@@ -195,7 +176,7 @@ async def messages(data: Request):
             if user_profile["service_selected"] == ServiceList.GENERAL.value:
                 # No brand scanned — route to One Reside agent instead of brand-specific general agent
                 pipeline = OneResidePipeline() if not data.get("brand") else GeneralPipeline()
-                
+
             elif (
                 user_profile["service_selected"]
                 == ServiceList.PRODUCT_SEARCH.value
@@ -218,8 +199,6 @@ async def messages(data: Request):
             save_to_mongo(data=data)
             response_manager.handle_responses(data=data)
 
-        return JSONResponse(content={"success": True}, status_code=200)
-
     except Exception as e:
         logger.exception(
             "Exception occured while running message endpoint",
@@ -233,7 +212,32 @@ async def messages(data: Request):
         ]
         save_to_mongo(data=data)
         response_manager.handle_responses(data=data)
+
+
+@app.post("/gupshup/message/onereside")
+async def messages(data: Request, background_tasks: BackgroundTasks):
+    """Message endpoint to send a message to the chatbot."""
+    request_data = await data.json()
+    logger.info("Request received with data", extra={"data": request_data})
+
+    if "payload" in request_data:
+        logger.info("Payload found in request data, ignoring it")
         return JSONResponse(content={"success": True}, status_code=200)
+
+    whatsapp_event = request_data["entry"][0]["changes"][0]["value"]
+
+    if "statuses" in whatsapp_event:
+        if "type" in whatsapp_event["statuses"][0]:
+            status = whatsapp_event["statuses"][0]["type"]
+        else:
+            status = whatsapp_event["statuses"][0]["status"]
+        logger.info(
+            "Ignoring message with status", extra={"status": status}
+        )
+        return JSONResponse(content={"success": True}, status_code=200)
+
+    background_tasks.add_task(process_message, request_data)
+    return JSONResponse(content={"success": True}, status_code=200)
 
 
 
