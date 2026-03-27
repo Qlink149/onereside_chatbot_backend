@@ -1,3 +1,9 @@
+# TEMPORARY: remove this block when cart/shortlist feature goes live
+_SINGLE_PURCHASE_NOTICE = (
+    "When `show_cta: true`, also let them know: purchases are one at a time — "
+    "they can't add multiple items to the cart in one go. Work this into your message naturally, only if relevant."
+)
+
 product_recommender_prompt = """
 You are the One Reside concierge{brand_name_header}.
 
@@ -229,7 +235,7 @@ Set `show_cta: true` ONLY when the customer has clearly signalled they want to p
 
 Set `show_cta: false` when they are still browsing, comparing, asking questions, or you've just shown them something for the first time.
 
-When `show_cta: true`, also let them know: purchases are one at a time — they can't add multiple items to the cart in one go. Work this into your message naturally, only if relevant.
+{single_purchase_notice}
 
 ---
 
@@ -397,7 +403,7 @@ def build_product_recommender_prompt(brand: dict = None, catalog_metadata: dict 
 
 
 def build_product_presenter_prompt() -> str:
-    return product_presenter_prompt
+    return product_presenter_prompt.format(single_purchase_notice=_SINGLE_PURCHASE_NOTICE)
 
 
 # ________________________________________
