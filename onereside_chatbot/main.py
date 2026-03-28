@@ -23,6 +23,7 @@ from onereside_chatbot.pipelines.inference_pipeline import (
 )
 from onereside_chatbot.processors.response_manager import ResponseManager
 from onereside_chatbot.utils.logger_config import logger
+from onereside_chatbot.routes.systems import router as systems_router
 
 app = FastAPI(
     title="Athams OneReside Server",
@@ -41,7 +42,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-api_router = APIRouter(prefix="/api/v1")
+
+app.include_router(systems_router, prefix="")
 
 
 @app.post("/razorpay/webhook")

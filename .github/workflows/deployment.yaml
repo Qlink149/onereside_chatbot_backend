@@ -72,6 +72,7 @@ jobs:
               -e RAZORPAY_WEBHOOK_SECRET=${{ secrets.RAZORPAY_WEBHOOK_SECRET }} \
               -e RAZORPAY_APP_ID=${{ secrets.RAZORPAY_APP_ID }} \
               -e RAZORPAY_APP_SECRETE=${{ secrets.RAZORPAY_APP_SECRETE }} \
+              -e DASHBOARD_API_KEY=${{ secrets.DASHBOARD_API_KEY }} \
               sgp.vultrcr.com/qlink01/onereside_bot
 
       - name: Cleanup Old Images

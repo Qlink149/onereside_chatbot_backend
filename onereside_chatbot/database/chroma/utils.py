@@ -102,6 +102,25 @@ def semantic_search(
         raise e
 
 
+def update_product_description(product_id: str, description: str):
+    """Update a product's description embedding in the vector DB."""
+    try:
+        product_collection.update(
+            ids=[product_id],
+            documents=[description],
+        )
+        logger.info(
+            "Product description updated in vector DB.",
+            extra={"product_id": product_id}
+        )
+    except Exception as e:
+        logger.error(
+            "Error updating product description in vector DB.",
+            extra={"product_id": product_id, "error": e}
+        )
+        raise e
+
+
 def delete_brand_products(brand_id: str):
     """Delete all product vectors for a brand."""
     try:
