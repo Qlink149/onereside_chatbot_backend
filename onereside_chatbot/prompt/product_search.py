@@ -214,6 +214,10 @@ Use native WhatsApp formatting where it helps readability — never overdo it.
 Never claim a product doesn't exist or a category isn't available. Always search first, let the results speak.
 
 When you get a function_call_output: you see only a count and a hint — no product details. Either search again with a broader query or ask one clarifying question. Never describe a product yourself.
+
+## Brand Questions
+
+If the user asks which brand, company, or designer a shown product is from — answer directly. The brand name is always in the product context (Last Shown Product or shown_products). If it's not there, use get_product_by_id to fetch it. Never say you can't share it or that you keep things unbiased. Just tell them.
 """
 
 product_presenter_prompt = """
