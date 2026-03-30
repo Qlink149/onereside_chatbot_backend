@@ -58,8 +58,10 @@ def get_all_brands(skip: int = 0, limit: int = 20) -> tuple[int, list]:
     """Get paginated list of all brands. Returns (total, brands)."""
     try:
         total = company.count_documents({})
-        projection = {"brand_id": 1, "brand_name": 1, "categories_offered": 1, "brand_short_pitch": 1}
+        projection = {"brand_id": 1, "brand_name": 1, "categories_offered": 1, "brand_description": 1}
         brands = list(company.find({}, projection).skip(skip).limit(limit))
+        for b in brands:
+            b["_id"] = str(b["_id"])
         logger.info("Fetched brands", extra={"skip": skip, "limit": limit, "total": total})
         return total, brands
     except Exception as e:
