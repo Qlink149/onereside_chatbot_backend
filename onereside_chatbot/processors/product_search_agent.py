@@ -157,7 +157,7 @@ class ProductAgent(Processor):
                     {"role": "system", "content": f"Recent chat history:\n{chat_history_str}"},
                     {"role": "system", "content": f"Last Shown Product: {user_profile.get('last_shown_product', '')}"},
                     {"role": "system", "content": f"All previously shown products (use product_id to fetch any of them): {shown_products_summary}"},
-                    {"role": "user", "content": user_query},
+                    {"role": "user", "content": f"User asked for this thing, {user_query}"},
                 ]
 
                 # Recommender loop — max 2 search iterations for self-correction
@@ -232,13 +232,15 @@ class ProductAgent(Processor):
                     if len(products) >= 2 or iteration >= MAX_SEARCH_ITERATIONS:
                         break
 
-                    # Feed back only count + hint — never product details, to prevent recommender hallucination
+                    # Feed back count + categories found — never product details, to prevent recommender hallucination
+                    categories_found = list({p.get("category", "") for p in products if p.get("category")})
                     current_messages = current_messages + list(response.output) + [
                         {
                             "type": "function_call_output",
                             "call_id": tool_call.call_id,
                             "output": json.dumps({
                                 "results_count": len(products),
+                                "categories_found": categories_found,
                                 "hint": "Too few results — try a broader query or drop the category/brand_id filter to widen the search." if len(products) < 2 else "ok",
                             }),
                         }
@@ -275,7 +277,7 @@ class ProductAgent(Processor):
                         {"role": "system", "content": f"Is new topic: {is_new_topic}. {'Treat this as a fresh first recommendation — ignore prior rejections in chat history.' if is_new_topic else ''}"},
                         {"role": "system", "content": f"Is re-show: {is_reshow}. {'The customer asked to see this product again — show it as requested, acknowledge it naturally.' if is_reshow else ''}"},
                         {"role": "system", "content": f"Is comparison: {is_comparison}. {'The customer wants to compare both products — write a side-by-side comparison message, set product_ids to both IDs, and set product_id to null.' if is_comparison else ''}"},
-                        {"role": "user", "content": user_query},
+                        {"role": "user", "content": f"User asked for this thing, {user_query}"},
                     ]
 
                     presenter_response = await openai_client.responses.create(
