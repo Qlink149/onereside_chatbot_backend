@@ -1,90 +1,101 @@
-from onereside_chatbot.processors.abstract_processor import Processor
-from onereside_chatbot.utils.logger_config import logger
-from onereside_chatbot.prompt.one_reside import one_reside_agent_prompt, output_schema
-from onereside_chatbot.utils.get_openai_client import openai_client
 import json
 
+from onereside_chatbot.database.brand_utils import get_brands_summary
+from onereside_chatbot.processors.abstract_processor import Processor
+from onereside_chatbot.prompt.one_reside import one_reside_agent_prompt, output_schema, search_brands_tool
+from onereside_chatbot.utils.get_openai_client import openai_client
+from onereside_chatbot.utils.logger_config import logger
+
+
 class OneResideAgent(Processor):
-    """Search a genral one reside related Query."""
+    """One Reside platform concierge — handles platform questions and brand discovery."""
 
     def should_run(self, data: dict) -> bool:
-        """Determine whether the processor should run based on the input data."""
         if "bot_response" in data:
             return False
         return True
-    
+
+    def handle_search_brands(self, query: str) -> str:
+        """Return all partner brands. The model handles matching against the user's query."""
+        brands = get_brands_summary()
+        return json.dumps({"query": query, "brands": brands})
+
     async def process(self, data: dict) -> dict:
-        """Process the input data and return the processed data."""
         phone_number = data["phone_number"]
         user_profile = data["user_profile"]
         username = user_profile["username"]
-        
+
+        if not self.should_run(data):
+            logger.info("Skipping processor", extra={"processor": self.__class__.__name__, "phone_number": phone_number})
+            return data
 
         try:
-            if "text" in data["messages"]:
-                user_query = data["messages"]["text"]["body"]
+            if "text" not in data["messages"]:
+                return data
 
-                # prompt 
-                agent_prompt = one_reside_agent_prompt
+            user_query = data["messages"]["text"]["body"]
 
-                # chat history
-                chat_history = user_profile.get("chat_history", [])[-10:]
-                chat_history_str = "\n".join(
-                    f"{c.get('role','').capitalize()}: {c.get('content','')}"
-                    for c in chat_history
-                )
+            chat_history = user_profile.get("chat_history", [])[-10:]
+            chat_history_str = "\n".join(
+                f"{c.get('role','').capitalize()}: {c.get('content','')}"
+                for c in chat_history
+            )
 
-                # agent input
-                messages = [
-                    {"role": "system", "content": f"Username: {username}"},
+            messages = [
+                {"role": "system", "content": f"Username: {username}"},
+                {"role": "system", "content": f"Recent chat history:\n{chat_history_str}"},
+                {"role": "user", "content": user_query},
+            ]
+
+            # Agent loop — handles optional tool call
+            response = await openai_client.responses.create(
+                model="gpt-4.1-mini",
+                instructions=one_reside_agent_prompt,
+                input=messages,
+                tools=[search_brands_tool],
+                tool_choice="auto",
+                text=output_schema,
+                max_output_tokens=400,
+            )
+
+            logger.info("OneReside agent response", extra={"response": response.model_dump(), "phone_number": phone_number})
+
+            tool_call = None
+            for item in response.output:
+                if item.type == "function_call":
+                    tool_call = item
+
+            if tool_call:
+                args = json.loads(tool_call.arguments)
+                tool_result = self.handle_search_brands(args.get("query", "all"))
+
+                logger.info("Tool invoked", extra={"tool": tool_call.name, "arguments": args, "result": tool_result})
+
+                follow_up_messages = messages + list(response.output) + [
                     {
-                        "role": "system",
-                        "content": f"Recent chat history:\n{chat_history_str}",
-                    },
-                    {"role": "user", "content": user_query},
+                        "type": "function_call_output",
+                        "call_id": tool_call.call_id,
+                        "output": tool_result,
+                    }
                 ]
 
-                # first agent call
                 response = await openai_client.responses.create(
                     model="gpt-4.1-mini",
-                    instructions=agent_prompt,
-                    input=messages,
+                    instructions=one_reside_agent_prompt,
+                    input=follow_up_messages,
                     text=output_schema,
-                    max_output_tokens=300,
+                    max_output_tokens=1000,
                 )
 
-                logger.info(
-                    "Initial OpenAI response",
-                    extra={
-                        "response": response.model_dump(), 
-                        "phone_number": phone_number
-                    },
-                )
+                logger.info("OneReside agent follow-up response", extra={"response": response.model_dump(), "phone_number": phone_number})
 
-                if response.output[0].type != "message":
-                    raise ValueError("Model did not return final message")
+            output_text = response.output[0].content[0].text
+            output = json.loads(output_text)
 
-                output_text = response.output[0].content[0].text
-                output = json.loads(output_text)
-
-                bot_response = []
-
-                for msg in output.get("messages", []):
-                    bot_response.append(
-                        {
-                            "type": "text",
-                            "text": msg
-                        }
-                    )
-
-                data["bot_response"] = bot_response
-                user_profile["service_selected"] = ""
-
-
+            data["bot_response"] = [{"type": "text", "text": msg} for msg in output.get("messages", [])]
+            user_profile["service_selected"] = ""
             return data
-        
+
         except Exception as e:
-            logger.exception(
-                "Exception occurred in Onereside agent."
-            )
+            logger.exception("Exception occurred in OneResideAgent.")
             raise e

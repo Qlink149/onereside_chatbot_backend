@@ -65,6 +65,8 @@ class ProductAgent(Processor):
                     return []
 
                 q = {"product_id": {"$in": filtered_ids}}
+                if category:
+                    q["category"] = {"$regex": category, "$options": "i"}
                 if price_min > 0 or (0 < price_max < 10_000_000):
                     price_filter = {}
                     if price_min > 0:
@@ -80,7 +82,7 @@ class ProductAgent(Processor):
                 order = {pid: i for i, pid in enumerate(filtered_ids)}
                 docs = list(pd.find(q, {"_id": 0, "media_url": 0}))
                 docs.sort(key=lambda p: order.get(p["product_id"], 999))
-                return docs[:3]
+                return docs[:5]
 
             # Step 1: search within brand (if brand_id provided)
             product_ids = semantic_search(
@@ -139,7 +141,7 @@ class ProductAgent(Processor):
                 product_presenter_prompt = build_product_presenter_prompt()
 
                 # Chat history
-                chat_history = user_profile.get("chat_history", [])[-10:]
+                chat_history = user_profile.get("chat_history", [])[-15:]
                 chat_history_str = "\n".join(
                     f"{c.get('role','').capitalize()}: {c.get('content','')}"
                     for c in chat_history
@@ -277,7 +279,7 @@ class ProductAgent(Processor):
                     ]
 
                     presenter_response = await openai_client.responses.create(
-                        model="gpt-4o-mini",
+                        model="gpt-4.1-mini",
                         instructions=product_presenter_prompt,
                         input=presenter_messages,
                         text=presenter_output_schema,
