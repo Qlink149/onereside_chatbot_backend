@@ -31,6 +31,22 @@ def _trim_for_presenter(products: list) -> list:
     return [{k: v for k, v in p.items() if k in PRESENTER_FIELDS} for p in products]
 
 
+def _apply_needs_update(user_profile: dict, output: dict) -> None:
+    """Merge add_needs / remove_needs from an LLM output into user_profile["pending_needs"]."""
+    pending: list = list(user_profile.get("pending_needs", []))
+    existing_lower = {n.lower() for n in pending}
+
+    for need in output.get("add_needs", []):
+        if need.lower() not in existing_lower:
+            pending.append(need)
+            existing_lower.add(need.lower())
+
+    remove_lower = {n.lower() for n in output.get("remove_needs", [])}
+    pending = [n for n in pending if n.lower() not in remove_lower]
+
+    user_profile["pending_needs"] = pending
+
+
 class ProductAgent(Processor):
     """Search a product search Query."""
 
@@ -152,11 +168,15 @@ class ProductAgent(Processor):
                     if shown_products else "[]"
                 )
 
+                pending_needs = user_profile.get("pending_needs", [])
+                pending_needs_str = json.dumps(pending_needs) if pending_needs else "[]"
+
                 messages = [
                     {"role": "system", "content": f"Username: {username}"},
                     {"role": "system", "content": f"Recent chat history:\n{chat_history_str}"},
                     {"role": "system", "content": f"Last Shown Product: {user_profile.get('last_shown_product', '')}"},
                     {"role": "system", "content": f"All previously shown products (use product_id to fetch any of them): {shown_products_summary}"},
+                    {"role": "system", "content": f"Pending needs (items user wants but hasn't resolved yet): {pending_needs_str}"},
                     {"role": "user", "content": f"User asked for this thing, {user_query}"},
                 ]
 
@@ -173,7 +193,7 @@ class ProductAgent(Processor):
 
                 while iteration < MAX_SEARCH_ITERATIONS:
                     response = await openai_client.responses.create(
-                        model="gpt-5-mini",
+                        model="gpt-4.1",
                         instructions=product_recommender_prompt,
                         input=current_messages,
                         tools=[search_products_tool, get_product_by_id_tool, compare_products_tool],
@@ -296,6 +316,8 @@ class ProductAgent(Processor):
                     presenter_output_text = presenter_response.output[0].content[0].text
                     presenter_output = json.loads(presenter_output_text)
 
+                    _apply_needs_update(user_profile, presenter_output)
+
                     bot_response = []
 
                     if presenter_output.get("product_ids"):
@@ -350,6 +372,23 @@ class ProductAgent(Processor):
                             user_profile["last_shown_product"] = json.dumps(product)
 
                             if presenter_output.get("show_cta"):
+                                # User signalled purchase intent — resolve matching pending need
+                                product_category = (product.get("category") or "").lower()
+                                pending = user_profile.get("pending_needs", [])
+                                resolved = user_profile.get("resolved_needs", [])
+                                remaining = []
+                                for need in pending:
+                                    if any(word in product_category for word in need.lower().split()):
+                                        resolved.append({
+                                            "need": need,
+                                            "product_id": product.get("product_id"),
+                                            "name": product.get("name", ""),
+                                        })
+                                    else:
+                                        remaining.append(need)
+                                user_profile["pending_needs"] = remaining
+                                user_profile["resolved_needs"] = resolved
+
                                 bot_response.append(
                                     {
                                         "type": "quickreply",
@@ -388,6 +427,8 @@ class ProductAgent(Processor):
 
                     output_text = text_message.content[0].text
                     output = json.loads(output_text)
+
+                    _apply_needs_update(user_profile, output)
 
                     data["bot_response"] = [{"type": "text", "text": output.get("message", "")}]
                     user_profile["service_selected"] = ""

@@ -227,6 +227,18 @@ Use native WhatsApp formatting where it helps readability — never overdo it.
 
 ---
 
+## Needs Tracking
+
+Always populate `add_needs` and `remove_needs` in your response:
+- `add_needs` — specific product types the user has mentioned in this message ("floor lamp", "sofa", "rug"). Short and specific. Empty list if none.
+- `remove_needs` — product types they've explicitly cancelled ("don't want the lamp anymore", "skip the sofa"). Empty list if none.
+
+When the user asks for two things and you defer one ("let's start with the sofa") — still add both to `add_needs`. The deferred item stays in the pending list so it's never forgotten.
+
+When `pending_needs` contains items not yet resolved — after confirming or resolving one, naturally bring up the next: "Now that we've sorted the sofa, want to find that floor lamp?"
+
+---
+
 Never claim a product doesn't exist or a category isn't available *before* searching. Always search first.
 
 When you get a function_call_output: you see a count, the categories found, and a hint — no product details. Use `categories_found` to check if results match what the user asked for.
@@ -462,9 +474,19 @@ output_schema = {
                 "message": {
                     "type": "string",
                     "description": "A single short WhatsApp-style message."
+                },
+                "add_needs": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "New specific product types the user has mentioned wanting (e.g. 'floor lamp', 'sofa', 'rug'). Empty list if none."
+                },
+                "remove_needs": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Product types the user has explicitly cancelled or said they no longer want. Empty list if none."
                 }
             },
-            "required": ["message"],
+            "required": ["message", "add_needs", "remove_needs"],
             "additionalProperties": False
         }
     }
@@ -494,9 +516,19 @@ presenter_output_schema = {
                 "message": {
                     "type": "string",
                     "description": "The message text to send to the customer."
+                },
+                "add_needs": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "New specific product types the user has mentioned wanting. Empty list if none."
+                },
+                "remove_needs": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Product types the user has explicitly cancelled or no longer wants. Empty list if none."
                 }
             },
-            "required": ["product_id", "product_ids", "show_cta", "message"],
+            "required": ["product_id", "product_ids", "show_cta", "message", "add_needs", "remove_needs"],
             "additionalProperties": False
         }
     }
