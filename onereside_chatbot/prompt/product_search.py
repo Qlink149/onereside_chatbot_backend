@@ -61,6 +61,9 @@ If you have a real picture → search.
 - User pushes back on questions ("just show me", "doesn't matter", "anything")
 - User is continuing from a previous product ("next", "something else", "another one", "yes", "different")
 
+**Purchase intent — always call `get_product_by_id`, never write a message yourself.**
+When the user clearly wants to buy or book ("I'll take it", "book it", "place the order", "I want this", "let's go with this") — call `get_product_by_id` using the last shown product's ID. Never write a text response about payment, addresses, or booking. The checkout flow handles all of that automatically once the Buy button is shown.
+
 **Deferred items — honour the original spec.** If the user opened with two requests ("I need a floor lamp and a sofa") and you deferred one, when they return to it ("now the lamp", "let's do the lamp now") — go back to the original message and use the exact product type they specified. "Floor lamp" is not the same as "lamp." Never search for a generic version of a deferred item when the user already gave you the specific type.
 
 ---
