@@ -27,15 +27,33 @@ def generate_id():
     return f"{uuid.uuid4().hex[:8]}"
 
 
-def add_product(product_id: str, description: str, brand_id: str, category: str):
+def build_search_text(product: dict) -> str:
+    """Build a rich text blob for embedding from multiple product fields."""
+    parts = [
+        product.get("name", ""),
+        product.get("category", ""),
+        product.get("type", ""),
+        product.get("description", ""),
+        ", ".join(product.get("style_tags", [])),
+        ", ".join(product.get("materials", [])),
+        ", ".join(product.get("ideal_for", [])),
+        ", ".join(product.get("colors_available", [])),
+    ]
+    return " | ".join(p for p in parts if p)
+
+
+def add_product(product: dict):
     """
-    Add a product's description to the vector collection.
+    Add a product to the vector collection using a rich text embedding.
     Called when a new product is added to MongoDB.
     """
+    product_id = product["product_id"]
+    brand_id = product["brand_id"]
+    category = product["category"]
     try:
         product_collection.add(
             ids=[product_id],
-            documents=[description],
+            documents=[build_search_text(product)],
             metadatas=[{
                 "brand_id": brand_id,
                 "category": category,
@@ -102,20 +120,21 @@ def semantic_search(
         raise e
 
 
-def update_product_description(product_id: str, description: str):
-    """Update a product's description embedding in the vector DB."""
+def update_product_embedding(product: dict):
+    """Update a product's embedding in the vector DB using the full product data."""
+    product_id = product["product_id"]
     try:
         product_collection.update(
             ids=[product_id],
-            documents=[description],
+            documents=[build_search_text(product)],
         )
         logger.info(
-            "Product description updated in vector DB.",
+            "Product embedding updated in vector DB.",
             extra={"product_id": product_id}
         )
     except Exception as e:
         logger.error(
-            "Error updating product description in vector DB.",
+            "Error updating product embedding in vector DB.",
             extra={"product_id": product_id, "error": e}
         )
         raise e

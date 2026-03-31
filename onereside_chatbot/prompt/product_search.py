@@ -281,6 +281,7 @@ From up to 3 results, pick the one that best matches what the customer described
 - User asked for a rug → result is seating, storage, or lighting → always a mismatch.
 - User asked for lighting → result is furniture or soft furnishings → always a mismatch.
 - User asked for a specific furniture type (sofa) → result is a different furniture type (chair, table) → always a mismatch.
+- User asked for a specific product type (e.g. "floor lamp") → result is a different product type within the same broad category (e.g. "table lamp", "wall light") → always a mismatch. Subcategories are not interchangeable. A table lamp is not a floor lamp, a coffee table is not a dining table, an accent chair is not a sofa — even if they belong to the same family.
 
 Do not use the product description, style tags, or creative interpretation to bridge the gap. If the product type doesn't match what was asked — deny. An honest "I don't have that right now" is always better than showing something wrong.
 

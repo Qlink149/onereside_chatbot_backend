@@ -3,7 +3,7 @@ import uuid
 from pymongo import ReturnDocument
 
 from onereside_chatbot.database.collections import product
-from onereside_chatbot.database.chroma.utils import add_product, update_product_description, delete_product as chroma_delete_product
+from onereside_chatbot.database.chroma.utils import add_product, update_product_embedding, delete_product as chroma_delete_product
 from onereside_chatbot.utils.logger_config import logger
 
 
@@ -76,12 +76,7 @@ def create_product(data: dict) -> dict:
         product.insert_one(data)
         data.pop("_id", None)
 
-        add_product(
-            product_id=product_id,
-            description=data["description"],
-            brand_id=data["brand_id"],
-            category=data["category"],
-        )
+        add_product(data)
 
         logger.info("Product created successfully.", extra={"product_id": product_id})
         return data
@@ -102,8 +97,9 @@ def update_product(product_id: str, update_data: dict) -> dict | None:
             logger.warning("No product found to update.", extra={"product_id": product_id})
             return None
 
-        if "description" in update_data:
-            update_product_description(product_id, update_data["description"])
+        _embedding_fields = {"name", "category", "type", "description", "style_tags", "materials", "ideal_for", "colors_available"}
+        if update_data.keys() & _embedding_fields:
+            update_product_embedding(result)
 
         result.pop("_id", None)
         logger.info("Product updated successfully.", extra={"product_id": product_id})

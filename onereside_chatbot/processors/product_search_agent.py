@@ -70,7 +70,7 @@ class ProductAgent(Processor):
 
             # Wider pool when price/category filters will be applied post-search
             has_filters = price_min > 0 or (0 < price_max < 10_000_000) or category
-            n_results = 15 if has_filters else 5
+            n_results = 15
 
             def fetch_products(product_ids: list) -> list:
                 if not product_ids:
@@ -119,7 +119,7 @@ class ProductAgent(Processor):
 
             logger.info(
                 "Search completed",
-                extra={"query": query, "brand_id": brand_id, "results": [p.get("product_id") for p in products]},
+                extra={"query": query, "brand_id": brand_id, "results": [p.get("product_id") for p in products], "category": category},
             )
             return products
 
