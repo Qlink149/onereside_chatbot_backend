@@ -221,6 +221,10 @@ class ProductAgent(Processor):
                     # if text_message:
                     #     break
 
+                    # No tool call — model responded directly, exit loop
+                    if tool_call is None:
+                        break
+
                     # Tool call detected on first pass — ack before the slow search
                     if iteration == 0:
                         _ack_messages = ["On it! 🔍", "Give me a sec...", "Let me look that up 👀"]
@@ -266,7 +270,7 @@ class ProductAgent(Processor):
                         }
                     ]
 
-                if tool_call:
+                if tool_call or products:
                     # Enrich with brand_name
                     unique_brand_ids = list({p["brand_id"] for p in products if p.get("brand_id")})
                     if unique_brand_ids:
