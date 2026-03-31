@@ -217,9 +217,9 @@ class ProductAgent(Processor):
                         elif item.type == "message":
                             text_message = item
 
-                    # If the model wrote a conversational message, show it — even if it also made a tool call
-                    if text_message:
-                        break
+                    # # If the model wrote a conversational message, show it — even if it also made a tool call
+                    # if text_message:
+                    #     break
 
                     # Tool call detected on first pass — ack before the slow search
                     if iteration == 0:
