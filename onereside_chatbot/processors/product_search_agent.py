@@ -200,7 +200,7 @@ class ProductAgent(Processor):
                         tool_choice="auto",
                         parallel_tool_calls=False,
                         text=output_schema,
-                        max_output_tokens=2000,
+                        max_output_tokens=5000,
                     )
 
                     logger.info(
