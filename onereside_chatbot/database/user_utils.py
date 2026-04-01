@@ -1,4 +1,4 @@
-from datetime import datetime
+import time
 
 from bson import ObjectId
 from pymongo import ReturnDocument
@@ -26,7 +26,7 @@ def save_to_mongo(data):
 
         current_history = user_profile_data.get("chat_history", [])
         user_profile_data["chat_history"] = current_history + new_chat
-        user_profile_data["updated_at"] = datetime.now()
+        user_profile_data["updated_at"] = int(time.time())
         user_profile_data["username"] = data["whatsapp_username"]
 
         response = idac.find_one_and_update(
@@ -57,8 +57,8 @@ def save_user_profile(phone_number: str, profile_data: dict):
             "Request received to save user profile with data",
             extra={"profile_data": profile_data, "phone_number": phone_number},
         )
-        profile_data["created_at"] = datetime.now()
-        profile_data["updated_at"] = datetime.now()
+        profile_data["created_at"] = int(time.time())
+        profile_data["updated_at"] = int(time.time())
 
         response = idac.find_one_and_update(
             {"phone_number": phone_number},
@@ -105,7 +105,7 @@ def get_all_users(skip: int = 0, limit: int = 20) -> tuple[int, list]:
     try:
         total = idac.count_documents({})
         projection = {"phone_number": 1, "username": 1, "updated_at": 1}
-        users = list(idac.find({}, projection).skip(skip).limit(limit))
+        users = list(idac.find({}, projection).sort("updated_at", -1).skip(skip).limit(limit))
         logger.info("Fetched users", extra={"skip": skip, "limit": limit, "total": total})
         return total, users
     except Exception as e:

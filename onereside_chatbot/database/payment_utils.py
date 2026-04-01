@@ -17,7 +17,6 @@ _LIST_PROJECTION = {
     "contact": 1,
     "captured": 1,
     "created_at": 1,
-    "raw_payload": 0,
 }
 
 
