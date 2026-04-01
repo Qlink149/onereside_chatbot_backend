@@ -14,6 +14,7 @@ from onereside_chatbot.database.collections import product as pd
 from onereside_chatbot.database.chroma.utils import semantic_search
 from onereside_chatbot.database.db_utils import get_product_by_id, get_brands_by_ids, get_catalog_metadata
 from onereside_chatbot.whatsapp_functions.send_text_message import send_text_message
+from onereside_chatbot.constants import ACK_MESSAGES
 
 import json
 import random
@@ -228,8 +229,7 @@ class ProductAgent(Processor):
 
                     # Tool call detected on first pass — ack before the slow search
                     if iteration == 0:
-                        _ack_messages = ["On it! 🔍", "Give me a sec...", "Let me look that up 👀"]
-                        send_text_message(phone_number, {"type": "text", "text": random.choice(_ack_messages)})
+                        send_text_message(phone_number, {"type": "text", "text": random.choice(ACK_MESSAGES)})
 
                     args = json.loads(tool_call.arguments)
                     is_new_topic = args.get("is_new_topic", False)

@@ -1,4 +1,5 @@
 import json
+import random
 from zoneinfo import ZoneInfo
 
 from onereside_chatbot.models.service_list import ServiceList
@@ -6,6 +7,7 @@ from onereside_chatbot.processors.abstract_processor import Processor
 from onereside_chatbot.prompt.classifier import (
     one_reside_classifier,
 )
+from onereside_chatbot.constants import UNSUPPORTED_TYPE_RESPONSES
 from onereside_chatbot.utils.get_openai_responses import get_openai_responses
 from onereside_chatbot.utils.logger_config import logger
 
@@ -48,7 +50,7 @@ class Classifier(Processor):
                         user_profile["service_selected"] = ServiceList.PRODUCT_CHECKOUT.value
                         return data
 
-            if "text" in data["messages"]:
+            elif "text" in data["messages"]:
                 user_query = data["messages"]["text"]["body"]
 
 
@@ -122,8 +124,14 @@ class Classifier(Processor):
                 if category == "one_reside":
                     user_profile["service_selected"] = ServiceList.ONE_RESIDE.value
                     return data
-
-
+                
+            else:
+                data["bot_response"] = [
+                    {
+                        "type": "text",
+                        "text": random.choice(UNSUPPORTED_TYPE_RESPONSES),
+                    }
+                ]
 
             return data
         except Exception as e:
