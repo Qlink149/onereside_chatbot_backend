@@ -157,7 +157,7 @@ class ProductAgent(Processor):
                 product_presenter_prompt = build_product_presenter_prompt()
 
                 # Chat history
-                chat_history = user_profile.get("chat_history", [])[-15:]
+                chat_history = user_profile.get("chat_history", [])[-24:]
                 chat_history_str = "\n".join(
                     f"{c.get('role','').capitalize()}: {c.get('content','')}"
                     for c in chat_history
