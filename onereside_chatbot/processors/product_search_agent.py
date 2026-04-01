@@ -189,6 +189,7 @@ class ProductAgent(Processor):
                 is_comparison = False
                 tool_call = None
                 text_message = None
+                search_category = ""
                 current_messages = messages
 
                 while iteration < MAX_SEARCH_ITERATIONS:
@@ -232,6 +233,8 @@ class ProductAgent(Processor):
 
                     args = json.loads(tool_call.arguments)
                     is_new_topic = args.get("is_new_topic", False)
+                    if tool_call.name == "search_products":
+                        search_category = args.get("category", "")
 
                     logger.info("Tool invoked", extra={"tool": tool_call.name, "arguments": args, "iteration": iteration + 1})
 
@@ -295,13 +298,14 @@ class ProductAgent(Processor):
                         {"role": "system", "content": f"Username: {username}"},
                         {"role": "system", "content": f"Customer's scanned brand: {scanned_brand_name}"},
                         {"role": "system", "content": f"Recent chat history:\n{chat_history_str}"},
+                        {"role": "user", "content": f"User asked for this thing, {user_query}"},
+                        {"role": "system", "content": f"Category searched for: {search_category}" if search_category else ""},
                         {"role": "system", "content": f"Search results: {json.dumps(_trim_for_presenter(products))}"},
                         {"role": "system", "content": f"Last Shown Product: {user_profile.get('last_shown_product', '')}"},
                         {"role": "system", "content": shown_summary},
                         {"role": "system", "content": f"Is new topic: {is_new_topic}. {'Treat this as a fresh first recommendation — ignore prior rejections in chat history.' if is_new_topic else ''}"},
                         {"role": "system", "content": f"Is re-show: {is_reshow}. {'The customer asked to see this product again — show it as requested, acknowledge it naturally.' if is_reshow else ''}"},
                         {"role": "system", "content": f"Is comparison: {is_comparison}. {'The customer wants to compare both products — write a side-by-side comparison message, set product_ids to both IDs, and set product_id to null.' if is_comparison else ''}"},
-                        {"role": "user", "content": f"User asked for this thing, {user_query}"},
                     ]
 
                     presenter_response = await openai_client.responses.create(
@@ -309,7 +313,7 @@ class ProductAgent(Processor):
                         instructions=product_presenter_prompt,
                         input=presenter_messages,
                         text=presenter_output_schema,
-                        max_output_tokens=400,
+                        max_output_tokens=1000,
                     )
 
                     logger.info(
