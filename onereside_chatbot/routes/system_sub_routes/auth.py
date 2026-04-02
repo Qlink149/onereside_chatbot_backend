@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
-from onereside_chatbot.utils.env_load import username, password, dashboard_api_key
+from onereside_chatbot.utils.env_load import username, password, dashboard_api_key, is_production
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -24,7 +24,8 @@ def login(body: LoginRequest, response: Response):
         value=dashboard_api_key,
         httponly=True,
         max_age=COOKIE_MAX_AGE,
-        samesite="lax",
+        samesite="none" if is_production else "lax",
+        secure=is_production,
     )
     return {"message": "Login successful"}
 
