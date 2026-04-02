@@ -32,5 +32,10 @@ def login(body: LoginRequest, response: Response):
 
 @router.post("/logout")
 def logout(response: Response):
-    response.delete_cookie(key=COOKIE_NAME)
+    response.delete_cookie(
+        key=COOKIE_NAME,
+        httponly=True,
+        samesite="none" if is_production else "lax",
+        secure=is_production,
+    )
     return {"message": "Logged out"}
