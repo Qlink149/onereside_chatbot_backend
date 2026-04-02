@@ -23,6 +23,7 @@ qlink_token = os.environ.get("QLINK_TOKEN")
 username = os.environ.get("LOGIN_USERNAME")
 password = os.environ.get("LOGIN_PASS")
 dashboard_api_key = os.environ.get("DASHBOARD_API_KEY")
+is_production = os.environ.get("ENV_MODE", "dev") == "prod"
 jwt_secret = os.environ.get("JWT_SECRET")
 jwt_expire_minutes = int(os.environ.get("JWT_EXPIRE_MINUTES", "480"))
 

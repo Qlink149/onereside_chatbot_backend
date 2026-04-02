@@ -1,17 +1,16 @@
-from fastapi import HTTPException, Security
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import Cookie, HTTPException
 from jose import jwt, JWTError
 
 from onereside_chatbot.utils.env_load import jwt_secret
 
+COOKIE_NAME = "dashboard_session"
 ALGORITHM = "HS256"
-_bearer = HTTPBearer(auto_error=False)
 
 
-def verify_api_key(credentials: HTTPAuthorizationCredentials = Security(_bearer)):
-    if not credentials:
+def verify_api_key(dashboard_session: str | None = Cookie(default=None, alias=COOKIE_NAME)):
+    if not dashboard_session:
         raise HTTPException(status_code=401, detail="Unauthorized")
     try:
-        jwt.decode(credentials.credentials, jwt_secret, algorithms=[ALGORITHM])
+        jwt.decode(dashboard_session, jwt_secret, algorithms=[ALGORITHM])
     except JWTError:
         raise HTTPException(status_code=401, detail="Unauthorized")
