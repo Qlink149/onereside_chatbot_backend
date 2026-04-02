@@ -73,6 +73,8 @@ jobs:
               -e RAZORPAY_APP_ID=${{ secrets.RAZORPAY_APP_ID }} \
               -e RAZORPAY_APP_SECRETE=${{ secrets.RAZORPAY_APP_SECRETE }} \
               -e DASHBOARD_API_KEY=${{ secrets.DASHBOARD_API_KEY }} \
+              -e LOGIN_USERNAME=${{ secrets.LOGIN_USERNAME }} \
+              -e LOGIN_PASS=${{ secrets.LOGIN_PASS }} \
               -e R2_ACCESS_KEY=${{ secrets.R2_ACCESS_KEY }} \
               -e R2_SECRET_KEY=${{ secrets.R2_SECRET_KEY }} \
               -e R2_ENDPOINT=${{ secrets.R2_ENDPOINT }} \

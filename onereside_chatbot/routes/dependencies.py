@@ -1,13 +1,11 @@
-import os
+from fastapi import Cookie, HTTPException
 
-from fastapi import HTTPException, Security
-from fastapi.security import APIKeyHeader
+from onereside_chatbot.utils.env_load import dashboard_api_key
 
-_api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+COOKIE_NAME = "dashboard_session"
 
 
-def verify_api_key(api_key: str = Security(_api_key_header)):
-    dashboard_api_key = os.environ.get("DASHBOARD_API_KEY")
-    if not dashboard_api_key or api_key != dashboard_api_key:
-        raise HTTPException(status_code=401, detail="Invalid or missing API key")
-    return api_key
+def verify_api_key(dashboard_session: str | None = Cookie(default=None, alias=COOKIE_NAME)):
+    if not dashboard_api_key or dashboard_session != dashboard_api_key:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return dashboard_session

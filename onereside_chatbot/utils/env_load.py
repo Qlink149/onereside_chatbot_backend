@@ -22,6 +22,7 @@ qlink_token = os.environ.get("QLINK_TOKEN")
 
 username = os.environ.get("LOGIN_USERNAME")
 password = os.environ.get("LOGIN_PASS")
+dashboard_api_key = os.environ.get("DASHBOARD_API_KEY")
 
 futwork_webhook = os.environ.get("FUTWORKS_API")
 futwork_pacific_agent = os.environ.get("FUTWORK_PACIFIC_AGENT")
