@@ -21,3 +21,4 @@ aiofiles
 
 razorpay
 
+boto3

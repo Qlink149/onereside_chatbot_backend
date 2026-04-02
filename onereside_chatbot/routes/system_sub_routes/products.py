@@ -1,11 +1,15 @@
+import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from pydantic import BaseModel
 
 from onereside_chatbot.database.brand_utils import get_brand_by_id
 from onereside_chatbot.database.product_utils import create_product, get_all_products, get_product_by_id, remove_product, update_product
+from onereside_chatbot.database.storage.r2_utils import upload_media
 from onereside_chatbot.routes.dependencies import verify_api_key
+
+ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp", "video/mp4"}
 
 router = APIRouter(prefix="/products", tags=["products"])
 
@@ -84,6 +88,24 @@ def patch_product(product_id: str, body: ProductUpdate, _: str = Depends(verify_
     if not updated:
         raise HTTPException(status_code=404, detail="Product not found")
     return updated
+
+
+@router.post("/media/upload", status_code=201)
+async def upload_product_media(
+    files: list[UploadFile] = File(...),
+    _: str = Depends(verify_api_key),
+):
+    """Upload one or more media files to R2. Returns media objects ready to use in product create/update."""
+    results = []
+    for file in files:
+        if file.content_type not in ALLOWED_CONTENT_TYPES:
+            raise HTTPException(status_code=400, detail=f"Unsupported file type: {file.content_type}")
+        ext = file.filename.rsplit(".", 1)[-1] if "." in file.filename else "jpg"
+        key = f"products/{uuid.uuid4().hex}.{ext}"
+        media_type = "video" if file.content_type.startswith("video") else "image"
+        url = upload_media(file.file, key, file.content_type)
+        results.append({"type": media_type, "url": url})
+    return {"media": results}
 
 
 @router.delete("/{product_id}", status_code=204)
