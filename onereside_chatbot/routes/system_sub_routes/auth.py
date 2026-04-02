@@ -1,12 +1,19 @@
-from fastapi import APIRouter, HTTPException, Response
+from datetime import datetime, timezone, timedelta
+
+from fastapi import APIRouter, HTTPException
+from jose import jwt
 from pydantic import BaseModel
 
-from onereside_chatbot.utils.env_load import username, password, dashboard_api_key, is_production
+from onereside_chatbot.utils.env_load import username, password, jwt_secret, jwt_expire_minutes
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-COOKIE_NAME = "dashboard_session"
-COOKIE_MAX_AGE = 60 * 60 * 8  # 8 hours
+ALGORITHM = "HS256"
+
+
+def _create_token() -> str:
+    expire = datetime.now(timezone.utc) + timedelta(minutes=jwt_expire_minutes)
+    return jwt.encode({"sub": "admin", "exp": expire}, jwt_secret, algorithm=ALGORITHM)
 
 
 class LoginRequest(BaseModel):
@@ -15,27 +22,7 @@ class LoginRequest(BaseModel):
 
 
 @router.post("/login")
-def login(body: LoginRequest, response: Response):
+def login(body: LoginRequest):
     if body.username != username or body.password != password:
         raise HTTPException(status_code=401, detail="Invalid credentials")
-
-    response.set_cookie(
-        key=COOKIE_NAME,
-        value=dashboard_api_key,
-        httponly=True,
-        max_age=COOKIE_MAX_AGE,
-        samesite="none" if is_production else "lax",
-        secure=is_production,
-    )
-    return {"message": "Login successful"}
-
-
-@router.post("/logout")
-def logout(response: Response):
-    response.delete_cookie(
-        key=COOKIE_NAME,
-        httponly=True,
-        samesite="none" if is_production else "lax",
-        secure=is_production,
-    )
-    return {"message": "Logged out"}
+    return {"access_token": _create_token(), "token_type": "bearer"}
