@@ -28,6 +28,7 @@ Thumbs.db
 *.sln
 *.sw?
 *.iml
+*claude
 
 # Node.js
 node_modules/
