@@ -195,7 +195,7 @@ class ProductAgent(Processor):
 
                 while iteration < MAX_SEARCH_ITERATIONS:
                     response = await openai_client.responses.create(
-                        model="gpt-4.1-mini",
+                        model="gpt-5-mini",
                         instructions=product_recommender_prompt,
                         input=current_messages,
                         tools=[search_products_tool, get_product_by_id_tool, compare_products_tool],
@@ -203,7 +203,7 @@ class ProductAgent(Processor):
                         parallel_tool_calls=False,
                         text=output_schema,
                         max_output_tokens=1200,
-                        # reasoning={"effort": "low"} 
+                        reasoning={"effort": "medium"} 
                     )
 
                     logger.info(
