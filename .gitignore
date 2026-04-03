@@ -19,6 +19,7 @@ Thumbs.db
 *.pyo
 *.pyd
 
+
 # IDE or Editor specific files
 .vscode/
 .idea/
@@ -28,6 +29,7 @@ Thumbs.db
 *.sln
 *.sw?
 *.iml
+*claude
 
 # Node.js
 node_modules/
@@ -131,3 +133,4 @@ venv.bak/
 
 testing
 postman.json
+
