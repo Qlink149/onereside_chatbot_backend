@@ -202,7 +202,7 @@ class ProductAgent(Processor):
                         tool_choice="auto",
                         parallel_tool_calls=False,
                         text=output_schema,
-                        max_output_tokens=3000,
+                        max_output_tokens=1200,
                         # reasoning={"effort": "low"} 
                     )
 
