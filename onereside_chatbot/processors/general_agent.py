@@ -52,7 +52,7 @@ class GeneralAgent(Processor):
                     instructions=general_prompt,
                     input=messages,
                     text=output_schema,
-                    max_output_tokens=500,
+                    max_output_tokens=1000,
                 )
 
                 logger.info(
@@ -69,17 +69,12 @@ class GeneralAgent(Processor):
                 output_text = response.output[0].content[0].text
                 output = json.loads(output_text)
 
-                bot_response = []
-
-                for msg in output.get("messages", []):
-                    bot_response.append(
-                        {
-                            "type": "text",
-                            "text": msg
-                        }
-                    )
-
-                data["bot_response"] = bot_response
+                data["bot_response"] = [
+                    {
+                        "type": "text",
+                        "text": output["message"]
+                    }
+                ]
                 user_profile["service_selected"] = ""
 
 

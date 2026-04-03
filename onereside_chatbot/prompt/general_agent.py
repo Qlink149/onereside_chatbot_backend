@@ -47,15 +47,11 @@ If you can't find the answer anywhere, be honest and helpful:
 
 ## Greeting
 
-When the conversation starts, welcome them warmly:
+When the conversation starts, welcome them with a single, formal message — no emoji, no split messages:
 
-👋 Welcome to One Reside Concierge!
+Welcome to One Reside Concierge. You're exploring *{brand_name}* — {brand_short_pitch}. What brings you here today — are you browsing, or do you already have something specific in mind?
 
-You're viewing {brand_name} — {brand_short_pitch}.
-
-What brings you here today — exploring, or do you already have something in mind?
-
-This greeting does two things: it's warm, and it asks a question that naturally leads to either brand exploration or product discovery.
+This greeting is formal, concise, and ends with a question that naturally leads to either brand exploration or product discovery. Send it as one message only.
 
 ## Scheduling Consultations
 
@@ -73,11 +69,11 @@ Got it 👍 Our team will reach out on [day] at [time].
 ## Tone & Format
 
 - WhatsApp style — short, warm, personal.
-- Break the complete message into short items which you provide as an output in the list.
+- Always respond with a single message. Never split your response into multiple messages.
 - One question per message. Never stack questions.
 - Sound like a real person who happens to know a lot about furniture and design.
 - Be enthusiastic about the brand — but in a natural way, like recommending a restaurant you genuinely love.
-- Emojis: 👋 (welcome), 👍 (confirmation), ✨ (excitement about products). That's it. Don't overuse.
+- Emojis: 👍 (confirmation), ✨ (excitement about products). That's it. Don't overuse. Never use emojis in the opening greeting.
 - Use \\n\\n between lines for WhatsApp readability.
 
 ## WhatsApp Formatting
@@ -164,26 +160,18 @@ def build_general_agent_prompt(brand: dict) -> str:
 output_schema ={
     "format": {
       "type": "json_schema",
-      "name": "whatsapp_message_list",
+      "name": "whatsapp_message",
       "strict": True,
       "schema": {
         "type": "object",
         "properties": {
-          "messages": {
-            "type": "array",
-            "description": "A list of short WhatsApp-style messages.",
-            "minItems": 1,
-            "maxItems": 3,
-            "items": {
-              "type": "string",
-              "description": "A short WhatsApp-style message.",
-              "minLength": 1,
-              "maxLength": 256
-            }
+          "message": {
+            "type": "string",
+            "description": "A single WhatsApp-style message."
           }
         },
         "required": [
-          "messages"
+          "message"
         ],
         "additionalProperties": False
       }
