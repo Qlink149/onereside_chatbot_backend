@@ -3,6 +3,7 @@ from onereside_chatbot.utils.logger_config import logger
 import re
 
 from onereside_chatbot.database.db_utils import get_brand_by_id, get_brand_by_name
+from onereside_chatbot.models.service_list import ServiceList
 
 class QRProcessor(Processor):
     """Search a genral Query."""
@@ -60,6 +61,11 @@ class QRProcessor(Processor):
                     user_profile["current_brand"] = current_brand.get("brand_id")
 
                     data["brand"] = current_brand
+                    data[
+                        "user_profile"
+                    ]["service_selected"] = ServiceList.GENERAL.value
+                    
+                    data["by_pass"] = True
 
                 else:
                     data["bot_response"] = [

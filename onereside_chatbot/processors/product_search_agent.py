@@ -147,8 +147,8 @@ class ProductAgent(Processor):
                 shown_products = user_profile.get("shown_products", [])
                 exclude_ids = [p["product_id"] for p in shown_products[-5:]] if shown_products else []
 
-                # Fetch catalog metadata for prompt injection
-                catalog_metadata = get_catalog_metadata()
+                # Fetch catalog metadata for prompt injection (brand-scoped when available)
+                catalog_metadata = get_catalog_metadata(brand_id=brand.get("brand_id") if brand else None)
 
                 # Build prompts
                 product_recommender_prompt = build_product_recommender_prompt(

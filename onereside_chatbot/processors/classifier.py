@@ -22,6 +22,8 @@ class Classifier(Processor):
         """Determine whether the processor should run based on the input data."""
         if "bot_response" in data:
             return False
+        elif data.get("by_pass"):
+            return False
         return True
     
 

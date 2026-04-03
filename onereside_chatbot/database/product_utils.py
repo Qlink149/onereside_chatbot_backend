@@ -149,16 +149,32 @@ def remove_product(product_id: str) -> bool:
         raise e
 
 
-def get_catalog_metadata() -> dict:
-    """Fetch distinct catalog attributes for prompt injection."""
+def get_catalog_metadata(brand_id: str = None) -> dict:
+    """
+    Fetch distinct catalog attributes for prompt injection.
+    If brand_id is provided, returns brand-scoped metadata alongside full platform metadata.
+    """
     try:
-        categories = product.distinct("category")
-        style_tags = product.distinct("style_tags")
-        ideal_for = product.distinct("ideal_for")
+        all_categories = [c for c in product.distinct("category") if c]
+        all_style_tags = [s for s in product.distinct("style_tags") if s]
+        all_ideal_for = [i for i in product.distinct("ideal_for") if i]
+
+        if brand_id:
+            brand_filter = {"brand_id": brand_id}
+            brand_categories = [c for c in product.distinct("category", brand_filter) if c]
+            brand_style_tags = [s for s in product.distinct("style_tags", brand_filter) if s]
+            brand_ideal_for = [i for i in product.distinct("ideal_for", brand_filter) if i]
+            return {
+                "categories": brand_categories,
+                "style_tags": brand_style_tags,
+                "ideal_for": brand_ideal_for,
+                "all_categories": all_categories,
+            }
+
         return {
-            "categories": [c for c in categories if c],
-            "style_tags": [s for s in style_tags if s],
-            "ideal_for": [i for i in ideal_for if i],
+            "categories": all_categories,
+            "style_tags": all_style_tags,
+            "ideal_for": all_ideal_for,
         }
     except Exception as e:
         logger.exception("Failed to fetch catalog metadata.")

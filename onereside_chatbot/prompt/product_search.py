@@ -457,6 +457,7 @@ def build_product_recommender_prompt(brand: dict = None, catalog_metadata: dict 
     categories = catalog_metadata.get("categories", [])
     style_tags = catalog_metadata.get("style_tags", [])
     ideal_for = catalog_metadata.get("ideal_for", [])
+    all_categories = catalog_metadata.get("all_categories", [])
 
     parts = []
     if categories:
@@ -471,12 +472,18 @@ def build_product_recommender_prompt(brand: dict = None, catalog_metadata: dict 
         brand_id = brand.get("brand_id", "")
         brand_name = brand.get("brand_name", "")
         brand_name_header = f" for {brand_name}"
+        cross_brand_note = (
+            f"\nWhen searching cross-brand (after brand search returns 0 results), "
+            f"the full platform catalog also includes: {', '.join(all_categories)}."
+            if all_categories else ""
+        )
         brand_scope_section = (
             f"The customer scanned: {brand_name} (brand_id: {brand_id})\n\n"
             f"Include brand_id: \"{brand_id}\" in your search_products call to search within this brand first.\n"
             "If the search returns 0 results (results_count: 0 in feedback), drop brand_id on your next call and search the full catalog.\n"
             "Do NOT output any text about the brand not having the product — just search cross-brand silently. The presenter handles messaging.\n"
-            "Omit brand_id immediately (skip brand-first) only if the customer explicitly asks for other brands."
+            f"Omit brand_id immediately (skip brand-first) only if the customer explicitly asks for other brands."
+            f"{cross_brand_note}"
         )
     else:
         brand_name_header = ""
