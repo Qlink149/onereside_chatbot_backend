@@ -1,4 +1,4 @@
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 from onereside_chatbot.utils.env_load import openai_api_key
 from onereside_chatbot.utils.logger_config import logger
@@ -21,10 +21,10 @@ async def get_openai_responses(
             "messages": messages,
         },
     )
-    async_client = OpenAI(api_key=openai_api_key)
+    async_client = AsyncOpenAI(api_key=openai_api_key)
     try:
         if output_format:
-            response = async_client.responses.create(
+            response = await async_client.responses.create(
                 model=model,
                 input=messages,
                 instructions=instruction,
@@ -32,7 +32,7 @@ async def get_openai_responses(
                 text=output_format,
             )
         else:
-            response = async_client.responses.create(
+            response = await async_client.responses.create(
                 model=model,
                 input=messages,
                 instructions=instruction,
