@@ -1,17 +1,17 @@
-from fastapi import Cookie, HTTPException
+from fastapi import HTTPException, Header
 from jose import jwt, JWTError, ExpiredSignatureError
 
 from onereside_chatbot.utils.env_load import jwt_secret
 
-COOKIE_NAME = "dashboard_session"
 ALGORITHM = "HS256"
 
 
-def verify_api_key(dashboard_session: str | None = Cookie(default=None, alias=COOKIE_NAME)):
-    if not dashboard_session:
+def verify_api_key(authorization: str | None = Header(default=None)):
+    if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Unauthorized")
+    token = authorization.removeprefix("Bearer ")
     try:
-        jwt.decode(dashboard_session, jwt_secret, algorithms=[ALGORITHM])
+        jwt.decode(token, jwt_secret, algorithms=[ALGORITHM])
     except ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Session expired")
     except JWTError:
