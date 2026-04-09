@@ -4,16 +4,17 @@ from fastapi import APIRouter, HTTPException, Response
 from jose import jwt
 from pydantic import BaseModel
 
-from onereside_chatbot.utils.env_load import username, password, jwt_secret, jwt_expire_minutes, is_production
+from onereside_chatbot.utils.env_load import username, password, jwt_secret, is_production
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 COOKIE_NAME = "dashboard_session"
 ALGORITHM = "HS256"
+JWT_EXPIRE_MINUTES = 1440  # 24 hours
 
 
 def _create_token() -> str:
-    expire = datetime.now(timezone.utc) + timedelta(minutes=jwt_expire_minutes)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=JWT_EXPIRE_MINUTES)
     return jwt.encode({"sub": "admin", "exp": expire}, jwt_secret, algorithm=ALGORITHM)
 
 
@@ -31,7 +32,7 @@ def login(body: LoginRequest, response: Response):
         key=COOKIE_NAME,
         value=_create_token(),
         httponly=True,
-        max_age=jwt_expire_minutes * 60,
+        max_age=JWT_EXPIRE_MINUTES * 60,
         path="/",
         samesite="none" if is_production else "lax",
         secure=is_production,
