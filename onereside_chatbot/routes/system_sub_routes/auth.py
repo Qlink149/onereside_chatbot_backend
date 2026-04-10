@@ -1,14 +1,13 @@
 from datetime import datetime, timezone, timedelta
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException
 from jose import jwt
 from pydantic import BaseModel
 
-from onereside_chatbot.utils.env_load import username, password, jwt_secret, is_production
+from onereside_chatbot.utils.env_load import username, password, jwt_secret
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-COOKIE_NAME = "dashboard_session"
 ALGORITHM = "HS256"
 JWT_EXPIRE_MINUTES = 1440  # 24 hours
 
@@ -24,32 +23,13 @@ class LoginRequest(BaseModel):
 
 
 @router.post("/login")
-def login(body: LoginRequest, response: Response):
+def login(body: LoginRequest):
     if body.username != username or body.password != password:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    response.set_cookie(
-        key=COOKIE_NAME,
-        value=_create_token(),
-        httponly=True,
-        max_age=JWT_EXPIRE_MINUTES * 60,
-        path="/",
-        samesite="none" if is_production else "lax",
-        secure=is_production,
-    )
-    return {"message": "Login successful"}
+    return {"token": _create_token()}
 
 
 @router.post("/logout")
-def logout(response: Response):
-    response.set_cookie(
-        key=COOKIE_NAME,
-        value="",
-        httponly=True,
-        max_age=0,
-        expires=0,
-        path="/",
-        samesite="none" if is_production else "lax",
-        secure=is_production,
-    )
+def logout():
     return {"message": "Logged out"}
