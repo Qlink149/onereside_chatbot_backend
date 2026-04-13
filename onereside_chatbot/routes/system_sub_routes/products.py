@@ -24,7 +24,7 @@ class ProductCreate(BaseModel):
     materials: list[str]
     colors_available: list[str]
     media_url: list[dict[str, Any]]
-    price_inr: int
+    price_inr: int | None = None
     delivery_weeks: int
     ideal_for: list[str]
     inventory_status: str
@@ -50,7 +50,10 @@ def add_product(body: ProductCreate, _: str = Depends(verify_api_key)):
     """Create a new product. product_id is auto-generated. brand_id must exist."""
     if not get_brand_by_id(body.brand_id):
         raise HTTPException(status_code=404, detail=f"Brand '{body.brand_id}' not found")
-    return create_product(body.model_dump())
+    data = body.model_dump()
+    if data.get("price_inr") == 0:
+        data["price_inr"] = None
+    return create_product(data)
 
 
 @router.get("")
