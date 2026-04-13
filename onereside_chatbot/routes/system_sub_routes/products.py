@@ -23,6 +23,7 @@ class ProductCreate(BaseModel):
     style_tags: list[str]
     materials: list[str]
     colors_available: list[str]
+    size: str | None = None
     media_url: list[dict[str, Any]]
     price_inr: int | None = None
     delivery_weeks: int
@@ -38,6 +39,7 @@ class ProductUpdate(BaseModel):
     style_tags: list[str] | None = None
     materials: list[str] | None = None
     colors_available: list[str] | None = None
+    size: str | None = None
     media_url: list[dict[str, Any]] | None = None
     price_inr: int | None = None
     delivery_weeks: int | None = None
