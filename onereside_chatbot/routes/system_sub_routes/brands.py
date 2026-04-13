@@ -9,6 +9,7 @@ from onereside_chatbot.database.brand_utils import (
     remove_brand,
     update_brand,
 )
+from onereside_chatbot.database.product_utils import remove_products_by_brand
 from onereside_chatbot.routes.dependencies import verify_api_key
 
 router = APIRouter(prefix="/brands", tags=["brands"])
@@ -83,6 +84,7 @@ def patch_brand(brand_id: str, body: BrandUpdate, _: str = Depends(verify_api_ke
 
 @router.delete("/{brand_id}", status_code=204)
 def delete_brand(brand_id: str, _: str = Depends(verify_api_key)):
-    """Delete a brand by brand_id."""
+    """Delete a brand and all its associated products."""
     if not remove_brand(brand_id):
         raise HTTPException(status_code=404, detail="Brand not found")
+    remove_products_by_brand(brand_id)

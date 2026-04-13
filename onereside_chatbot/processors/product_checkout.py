@@ -4,6 +4,7 @@ from onereside_chatbot.processors.abstract_processor import Processor
 from onereside_chatbot.utils.logger_config import logger
 from onereside_chatbot.database.db_utils import get_product_by_id, save_order
 from onereside_chatbot.utils.razorpay_utils import create_payment_link
+from onereside_chatbot.models.enums import FLowId
 
 class ProductCheckoutAgent(Processor):
     """Search a product checkout query."""
@@ -22,8 +23,54 @@ class ProductCheckoutAgent(Processor):
         
         try:
             if "interactive" in data["messages"]:
+
+                if "nfm_reply" in data["messages"]["interactive"]:
+                    nfm_reply = data["messages"]["interactive"]["nfm_reply"]
+                    if nfm_reply["name"] == "flow":
+                        flow_data = json.loads(nfm_reply["response_json"])
+                        if flow_data.get("flow_token") in {FLowId.CHECKOUT_ADDRESS.value}:
+                            logger.info(
+                                "checkout address data received data received",
+                                extra={"phone_number": phone_number},
+                            )
+
+                            address = {
+                                "address": flow_data.get("screen_0_Complete_Address_0", username),
+                                "pin_code": flow_data.get("screen_0_Pin_Code_1", ""),
+                                "city": flow_data.get("screen_0_City_2", ""),
+                                "state": flow_data.get("screen_0_State_3", ""),
+                                "country": flow_data.get("screen_0_Country_4", ""),
+                                "personal_details": {
+                                    "first_name": flow_data.get("screen_1_First_Name_0", ""),
+                                    "last_name": flow_data.get("screen_1_Last_Name_1", ""),
+                                    "phone_number": flow_data.get("screen_1_Phone_Number_2", ""),
+                                    "email": flow_data.get("screen_1_Email_3", ""),
+                                    "wa_phone": phone_number,
+                                }
+                            }
+
+                            user_profile["address"] = address
+
+                            formatted_address = (
+                                f"{address['personal_details']['first_name']} {address['personal_details']['last_name']}\n"
+                                f"{address['address']}\n"
+                                f"{address['city']}, {address['state']} - {address['pin_code']}\n"
+                                f"{address['country']}\n"
+                                f"📞 {address['personal_details']['phone_number']}"
+                            )
+
+                            data["bot_response"] = [
+                                {
+                                    "type": "quickreply",
+                                    "text": f"Confirm this address:\n\n{formatted_address}",
+                                    "caption": "You can edit if needed.",
+                                    "options": [{"title": "Continue"}, {"title": "Edit Address"}],
+                                    "msgid": "address_confirmation",
+                                }
+                            ]
+                    
                 
-                if "button_reply" in data:
+                elif "button_reply" in data:
                     button_details = data.get("button_reply")
 
                     payload = json.loads(button_details.get("id"))
@@ -50,27 +97,33 @@ class ProductCheckoutAgent(Processor):
 
 
                         if user_profile.get("address"):
+
+                            address = user_profile["address"]
+
+                            formatted_address = (
+                                f"{address['personal_details']['first_name']} {address['personal_details']['last_name']}\n"
+                                f"{address['address']}\n"
+                                f"{address['city']}, {address['state']} - {address['pin_code']}\n"
+                                f"{address['country']}\n"
+                                f"📞 {address['personal_details']['phone_number']}"
+                            )
+
                             data["bot_response"] = [
-                               {
+                                {
                                     "type": "quickreply",
-                                    "text": f"Do you want to continue with this address, \n{
-                                        user_profile["address"]
-                                    }",
-                                    "caption": "Click the edit to edit the address.",
+                                    "text": f"Confirm this address:\n\n{formatted_address}",
+                                    "caption": "You can edit if needed.",
                                     "options": [{"title": "Continue"}, {"title": "Edit Address"}],
                                     "msgid": "address_confirmation",
-                                } 
+                                }
                             ]
                         else:
                             data["bot_response"] = [
                                 {
-                                    "type": "text",
-                                    "text": f"Adress Flow.",
+                                    "type": "flow",
+                                    "flow": "address"
                                 }
                             ]
-                            user_profile["address"] = {
-                                "draft": True
-                            }
 
                     elif msgid == "address_confirmation":
                         selected_prod = user_profile.get("selected_product_id")
@@ -113,19 +166,35 @@ class ProductCheckoutAgent(Processor):
                         else:
                             data["bot_response"] = [
                                 {
-                                    "type": "text",
-                                    "text": f"Adress Flow.",
+                                    "type": "flow",
+                                    "flow": "address"
                                 }
                             ]
 
+                    elif msgid == "cancel_purchase":
+                        user_profile["service_selected"] = ""
+                        user_profile["selected_product_id"] = {}
 
-                        # data["bot_response"] = [
-                        #     {
-                        #         "type": "text",
-                        #         "text": f"Product Purchase flow {prod_name}.",
-                        #     }
-                        # ]
- 
+                        data["bot_response"] = [
+                            {
+                                "type": "text",
+                                "text": "Your checkout has been cancelled. You can continue browsing."
+                            }
+                        ]
+
+                else:
+
+                    data["bot_response"] = [
+                        {
+                            "type": "quickreply",
+                            "text": f"Please complete the checkout first., \n{
+                                 user_profile["address"]
+                            }",
+                            "caption": "Click the button to cancel.",
+                            "options": [{"title": "cancel purchase"}],
+                            "msgid": "cancel_purchase",
+                        } 
+                    ]
             
             return data
         

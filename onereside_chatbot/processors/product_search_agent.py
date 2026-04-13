@@ -202,7 +202,8 @@ class ProductAgent(Processor):
                         tool_choice="auto",
                         parallel_tool_calls=False,
                         text=output_schema,
-                        max_output_tokens=5000,
+                        max_output_tokens=1200,
+                        reasoning={"effort": "minimal"} 
                     )
 
                     logger.info(
@@ -379,40 +380,31 @@ class ProductAgent(Processor):
 
                             user_profile["last_shown_product"] = json.dumps(product)
 
-                            if presenter_output.get("show_cta"):
-                                # User signalled purchase intent — resolve matching pending need
-                                product_category = (product.get("category") or "").lower()
-                                pending = user_profile.get("pending_needs", [])
-                                resolved = user_profile.get("resolved_needs", [])
-                                remaining = []
-                                for need in pending:
-                                    if any(word in product_category for word in need.lower().split()):
-                                        resolved.append({
-                                            "need": need,
-                                            "product_id": product.get("product_id"),
-                                            "name": product.get("name", ""),
-                                        })
-                                    else:
-                                        remaining.append(need)
-                                user_profile["pending_needs"] = remaining
-                                user_profile["resolved_needs"] = resolved
+                            product_category = (product.get("category") or "").lower()
+                            pending = user_profile.get("pending_needs", [])
+                            resolved = user_profile.get("resolved_needs", [])
+                            remaining = []
+                            for need in pending:
+                                if any(word in product_category for word in need.lower().split()):
+                                    resolved.append({
+                                        "need": need,
+                                        "product_id": product.get("product_id"),
+                                        "name": product.get("name", ""),
+                                    })
+                                else:
+                                    remaining.append(need)
+                            user_profile["pending_needs"] = remaining
+                            user_profile["resolved_needs"] = resolved
 
-                                bot_response.append(
-                                    {
-                                        "type": "quickreply",
-                                        "text": presenter_output.get("message", ""),
-                                        "caption": "Click the cta to buy the product.",
-                                        "options": [{"title": "Buy"}],
-                                        "msgid": f"buy${presenter_output['product_id']}",
-                                    }
-                                )
-                            else:
-                                bot_response.append(
-                                    {
-                                        "type": "text",
-                                        "text": presenter_output.get("message", ""),
-                                    }
-                                )
+                            bot_response.append(
+                                {
+                                    "type": "quickreply",
+                                    "text": presenter_output.get("message", ""),
+                                    "caption": "Click the cta to buy the product.",
+                                    "options": [{"title": "Buy"}],
+                                    "msgid": f"buy${presenter_output['product_id']}",
+                                }
+                            )
                     else:
                         bot_response.append(
                             {

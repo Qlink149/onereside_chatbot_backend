@@ -19,6 +19,7 @@ Thumbs.db
 *.pyo
 *.pyd
 
+
 # IDE or Editor specific files
 .vscode/
 .idea/
@@ -132,3 +133,4 @@ venv.bak/
 
 testing
 postman.json
+

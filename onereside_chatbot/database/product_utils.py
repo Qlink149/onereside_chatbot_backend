@@ -3,7 +3,7 @@ import uuid
 from pymongo import ReturnDocument
 
 from onereside_chatbot.database.collections import product
-from onereside_chatbot.database.chroma.utils import add_product, update_product_embedding, delete_product as chroma_delete_product
+from onereside_chatbot.database.chroma.utils import add_product, update_product_embedding, delete_product as chroma_delete_product, delete_brand_products as chroma_delete_brand_products
 from onereside_chatbot.database.storage.r2_utils import delete_media
 from onereside_chatbot.utils.env_load import r2_public_url
 from onereside_chatbot.utils.logger_config import logger
@@ -146,6 +146,27 @@ def remove_product(product_id: str) -> bool:
         return True
     except Exception as e:
         logger.exception("Exception occurred while deleting product.", extra={"product_id": product_id})
+        raise e
+
+
+def remove_products_by_brand(brand_id: str) -> int:
+    """Delete all products for a brand from MongoDB, Chroma, and R2. Returns count deleted."""
+    try:
+        docs = list(product.find({"brand_id": brand_id}, {"product_id": 1, "media_url": 1}))
+        if not docs:
+            return 0
+        product_ids = [d["product_id"] for d in docs]
+        product.delete_many({"brand_id": brand_id})
+        chroma_delete_brand_products(brand_id)
+        for doc in docs:
+            for media in doc.get("media_url", []):
+                key = _extract_r2_key(media.get("url", ""))
+                if key:
+                    delete_media(key)
+        logger.info("Brand products deleted.", extra={"brand_id": brand_id, "count": len(product_ids)})
+        return len(product_ids)
+    except Exception as e:
+        logger.exception("Exception occurred while deleting brand products.", extra={"brand_id": brand_id})
         raise e
 
 

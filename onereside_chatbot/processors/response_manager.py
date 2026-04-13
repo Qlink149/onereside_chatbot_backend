@@ -20,6 +20,7 @@ from onereside_chatbot.whatsapp_functions.quick_reply.send_quick_reply import (
 from onereside_chatbot.whatsapp_functions.send_text_message import send_text_message
 from onereside_chatbot.utils.logger_config import logger
 import time
+from onereside_chatbot.whatsapp_functions.flow.send_address_flow import send_address_flow
 
 
 class ResponseManager:
@@ -133,6 +134,8 @@ class ResponseManager:
 
         if flow_name == "site_visit":
             return send_site_visit_flow(phone_number=phone_number)
+        if flow_name == "address":
+            return send_address_flow(phone_number=phone_number)
         else:
             raise ValueError(f"Unknown flow: {flow_name}")
 

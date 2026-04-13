@@ -51,6 +51,11 @@ class Classifier(Processor):
                     if data["button_reply"]["title"] == "Buy":
                         user_profile["service_selected"] = ServiceList.PRODUCT_CHECKOUT.value
                         return data
+                    
+                if "nfm_reply" in interactive:
+                    if interactive["nfm_reply"]["name"] == "flow":
+                        user_profile["service_selected"] = ServiceList.PRODUCT_CHECKOUT.value
+                        return data
 
             elif "text" in data["messages"]:
                 user_query = data["messages"]["text"]["body"]
