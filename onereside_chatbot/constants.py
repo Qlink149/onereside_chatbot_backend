@@ -42,6 +42,13 @@ ACK_MESSAGES = [
     "Understood, I'll have this ready for you shortly",
 ]
 
+AGENT_REQUEST_RESPONSES = [
+    "Our concierge team has been notified and will connect with you shortly.\n\nIn the meantime, I'm here if you'd like to keep exploring — happy to help you find the right piece.",
+    "Done — our team has been looped in and will reach out to you soon.\n\nFeel free to keep browsing in the meantime. I'm here if you need anything.",
+    "I've let the team know — someone from One Reside will be in touch with you shortly.\n\nUntil then, happy to keep helping you explore.",
+    "Our team's been notified and will connect with you soon.\n\nIn the meantime, let me know if there's anything else I can help you with.",
+]
+
 UNSUPPORTED_TYPE_RESPONSES = [
     "I'm sorry, I'm currently unable to process images or voice recordings. Could you please share the details in text?",
     "I can't view that, but if you describe it, I'll help you right away 😊",

@@ -7,7 +7,7 @@ from onereside_chatbot.processors.abstract_processor import Processor
 from onereside_chatbot.prompt.classifier import (
     one_reside_classifier,
 )
-from onereside_chatbot.constants import UNSUPPORTED_TYPE_RESPONSES
+from onereside_chatbot.constants import UNSUPPORTED_TYPE_RESPONSES, AGENT_REQUEST_RESPONSES
 from onereside_chatbot.utils.get_openai_responses import get_openai_responses
 from onereside_chatbot.utils.logger_config import logger
 
@@ -130,6 +130,16 @@ class Classifier(Processor):
 
                 if category == "one_reside":
                     user_profile["service_selected"] = ServiceList.ONE_RESIDE.value
+                    return data
+
+                if category == "agent_request":
+                    user_profile["agent_request"] = True
+                    data["bot_response"] = [
+                        {
+                            "type": "text",
+                            "text": random.choice(AGENT_REQUEST_RESPONSES),
+                        }
+                    ]
                     return data
                 
             else:

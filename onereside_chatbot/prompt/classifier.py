@@ -12,6 +12,8 @@ Categories:
 
 • "one_reside": Questions about the One Reside platform itself — how it works, policies, returns, delivery process, trust, or support. NOT about a specific brand or product.
 
+• "agent_request": User wants to connect to a live human agent — either by asking directly, or by saying yes/confirming after the bot suggests it. This overrides all other categories.
+
 ---
 
 Classification Rules:
@@ -21,6 +23,8 @@ Classification Rules:
 2. Use "product" for the entire product journey — discovery, preference answers, rejections, acceptance, payment, and cross-sell exploration.
 
 3. Use "one_reside" only when the question is clearly about the One Reside platform, not a brand or product.
+
+4. Use "agent_request" when the user explicitly asks to talk to a person/team/agent, or confirms they want to after the bot offers it. This takes priority over all other categories.
 
 ---
 
@@ -78,4 +82,19 @@ Examples:
 
 15. Message: "What's your return policy?" | Active agent: general
 {"category": "one_reside"}
+
+16. Message: "Can I talk to someone?" | Active agent: any
+{"category": "agent_request"}
+
+17. Message: "Connect me to a real person" | Active agent: any
+{"category": "agent_request"}
+
+18. Message: "Yes" | Active agent: general (bot just asked "want me to connect you with the team?")
+{"category": "agent_request"}
+
+19. Message: "Yes please connect me" | Active agent: any
+{"category": "agent_request"}
+
+20. Message: "I'd like to speak to the team" | Active agent: any
+{"category": "agent_request"}
 """
