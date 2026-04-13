@@ -62,6 +62,21 @@ Use native WhatsApp formatting where it adds clarity.
 """
 
 
+list_all_brands_tool = {
+    "type": "function",
+    "name": "list_all_brands",
+    "strict": False,
+    "description": (
+        "Returns the full list of all brand names available on the One Reside platform. "
+        "Use when the user asks 'what brands do you have?' or wants to see all available brands."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+    }
+}
+
 search_brands_tool = {
     "type": "function",
     "name": "search_brands",

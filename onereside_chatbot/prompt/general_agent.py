@@ -157,6 +157,43 @@ def build_general_agent_prompt(brand: dict) -> str:
     return prompt
 
 
+list_all_brands_tool = {
+    "type": "function",
+    "name": "list_all_brands",
+    "strict": False,
+    "description": (
+        "Returns the full list of all brand names available on the One Reside platform. "
+        "Use when the user asks 'what brands do you have?' or wants to see all available brands."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+    }
+}
+
+search_brands_tool = {
+    "type": "function",
+    "name": "search_brands",
+    "strict": False,
+    "description": (
+        "Semantic search for brands on the One Reside platform. "
+        "Use when the user asks about other brands, wants to explore more options, "
+        "or asks if a specific brand is available."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "What the user is looking for — brand name, category, or style."
+            }
+        },
+        "required": ["query"]
+    }
+}
+
+
 output_schema ={
     "format": {
       "type": "json_schema",

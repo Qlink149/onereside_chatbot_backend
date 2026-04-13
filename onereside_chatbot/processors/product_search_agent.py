@@ -8,10 +8,12 @@ from onereside_chatbot.prompt.product_search import (
     search_products_tool,
     get_product_by_id_tool,
     compare_products_tool,
+    search_brand_tool,
 )
 from onereside_chatbot.utils.get_openai_client import openai_client
 from onereside_chatbot.database.collections import product as pd
-from onereside_chatbot.database.chroma.utils import semantic_search
+from onereside_chatbot.database.chroma.utils import semantic_search, semantic_brand_search
+from onereside_chatbot.database.brand_utils import get_brand_by_id
 from onereside_chatbot.database.db_utils import get_product_by_id, get_brands_by_ids, get_catalog_metadata
 from onereside_chatbot.whatsapp_functions.send_text_message import send_text_message
 from onereside_chatbot.constants import ACK_MESSAGES
@@ -198,7 +200,7 @@ class ProductAgent(Processor):
                         model="gpt-5",
                         instructions=product_recommender_prompt,
                         input=current_messages,
-                        tools=[search_products_tool, get_product_by_id_tool, compare_products_tool],
+                        tools=[search_products_tool, get_product_by_id_tool, compare_products_tool, search_brand_tool],
                         tool_choice="auto",
                         parallel_tool_calls=False,
                         text=output_schema,
@@ -238,6 +240,32 @@ class ProductAgent(Processor):
                         search_category = args.get("category", "")
 
                     logger.info("Tool invoked", extra={"tool": tool_call.name, "arguments": args, "iteration": iteration + 1})
+
+                    if tool_call.name == "search_brand":
+                        query = args.get("query", "")
+                        results = semantic_brand_search(query, n_results=3)
+                        if results:
+                            # Fetch full brand doc for the top match to include description
+                            top = get_brand_by_id(results[0]["brand_id"])
+                            brand_result = {
+                                "found": True,
+                                "brand_id": top.get("brand_id"),
+                                "brand_name": top.get("brand_name"),
+                                "brand_description": top.get("brand_description"),
+                                "categories_offered": top.get("categories_offered", []),
+                            } if top else {"found": False}
+                        else:
+                            brand_result = {"found": False}
+
+                        current_messages = current_messages + list(response.output) + [
+                            {
+                                "type": "function_call_output",
+                                "call_id": tool_call.call_id,
+                                "output": json.dumps(brand_result),
+                            }
+                        ]
+                        iteration += 1
+                        continue
 
                     if tool_call.name == "compare_products":
                         p1 = get_product_by_id(product_id=args["product_id_1"])

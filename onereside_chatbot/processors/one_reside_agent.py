@@ -1,8 +1,9 @@
 import json
 
 from onereside_chatbot.database.brand_utils import get_brands_summary
+from onereside_chatbot.database.chroma.utils import semantic_brand_search
 from onereside_chatbot.processors.abstract_processor import Processor
-from onereside_chatbot.prompt.one_reside import one_reside_agent_prompt, output_schema, search_brands_tool
+from onereside_chatbot.prompt.one_reside import one_reside_agent_prompt, output_schema, search_brands_tool, list_all_brands_tool
 from onereside_chatbot.utils.get_openai_client import openai_client
 from onereside_chatbot.utils.logger_config import logger
 
@@ -16,9 +17,14 @@ class OneResideAgent(Processor):
         return True
 
     def handle_search_brands(self, query: str) -> str:
-        """Return all partner brands. The model handles matching against the user's query."""
-        brands = get_brands_summary()
+        """Semantic search for brands matching the user's query."""
+        brands = semantic_brand_search(query)
         return json.dumps({"query": query, "brands": brands})
+
+    def handle_list_all_brands(self) -> str:
+        """Return all brand names from MongoDB."""
+        brands = get_brands_summary()
+        return json.dumps({"brands": brands})
 
     async def process(self, data: dict) -> dict:
         phone_number = data["phone_number"]
@@ -52,7 +58,7 @@ class OneResideAgent(Processor):
                 model="gpt-4.1-mini",
                 instructions=one_reside_agent_prompt,
                 input=messages,
-                tools=[search_brands_tool],
+                tools=[search_brands_tool, list_all_brands_tool],
                 tool_choice="auto",
                 text=output_schema,
                 max_output_tokens=400,
@@ -67,7 +73,10 @@ class OneResideAgent(Processor):
 
             if tool_call:
                 args = json.loads(tool_call.arguments)
-                tool_result = self.handle_search_brands(args.get("query", "all"))
+                if tool_call.name == "list_all_brands":
+                    tool_result = self.handle_list_all_brands()
+                else:
+                    tool_result = self.handle_search_brands(args.get("query", ""))
 
                 logger.info("Tool invoked", extra={"tool": tool_call.name, "arguments": args, "result": tool_result})
 

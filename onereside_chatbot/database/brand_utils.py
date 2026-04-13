@@ -2,6 +2,7 @@ import re
 
 from pymongo import ReturnDocument
 
+from onereside_chatbot.database.chroma.utils import add_brand, update_brand_embedding, delete_brand
 from onereside_chatbot.database.collections import company
 from onereside_chatbot.utils.logger_config import logger
 
@@ -84,6 +85,7 @@ def create_brand(data: dict) -> dict:
         data["brand_id"] = _generate_brand_id(data["brand_name"])
         company.insert_one(data)
         data.pop("_id", None)
+        add_brand(data)
         logger.info("Brand created successfully.", extra={"brand_id": data["brand_id"]})
         return data
     except Exception as e:
@@ -103,6 +105,7 @@ def update_brand(brand_id: str, update_data: dict) -> dict | None:
             logger.warning("No brand found to update.", extra={"brand_id": brand_id})
             return None
         result.pop("_id", None)
+        update_brand_embedding(result)
         logger.info("Brand updated successfully.", extra={"brand_id": brand_id})
         return result
     except Exception as e:
@@ -117,6 +120,7 @@ def remove_brand(brand_id: str) -> bool:
         if result.deleted_count == 0:
             logger.warning("No brand found to delete.", extra={"brand_id": brand_id})
             return False
+        delete_brand(brand_id)
         logger.info("Brand deleted successfully.", extra={"brand_id": brand_id})
         return True
     except Exception as e:

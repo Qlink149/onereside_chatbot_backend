@@ -1,8 +1,11 @@
-from onereside_chatbot.processors.abstract_processor import Processor
-from onereside_chatbot.utils.logger_config import logger
-from onereside_chatbot.prompt.general_agent import build_general_agent_prompt, output_schema
-from onereside_chatbot.utils.get_openai_client import openai_client
 import json
+
+from onereside_chatbot.database.brand_utils import get_brands_summary
+from onereside_chatbot.database.chroma.utils import semantic_brand_search
+from onereside_chatbot.processors.abstract_processor import Processor
+from onereside_chatbot.prompt.general_agent import build_general_agent_prompt, output_schema, search_brands_tool, list_all_brands_tool
+from onereside_chatbot.utils.get_openai_client import openai_client
+from onereside_chatbot.utils.logger_config import logger
 
 class GeneralAgent(Processor):
     """Search a genral Query."""
@@ -51,6 +54,8 @@ class GeneralAgent(Processor):
                     model="gpt-4.1-mini",
                     instructions=general_prompt,
                     input=messages,
+                    tools=[search_brands_tool, list_all_brands_tool],
+                    tool_choice="auto",
                     text=output_schema,
                     max_output_tokens=1000,
                 )
@@ -58,13 +63,47 @@ class GeneralAgent(Processor):
                 logger.info(
                     "Initial OpenAI response",
                     extra={
-                        "response": response.model_dump(), 
+                        "response": response.model_dump(),
                         "phone_number": phone_number
                     },
                 )
 
-                if response.output[0].type != "message":
-                    raise ValueError("Model did not return final message")
+                tool_call = None
+                for item in response.output:
+                    if item.type == "function_call":
+                        tool_call = item
+
+                if tool_call:
+                    args = json.loads(tool_call.arguments)
+                    if tool_call.name == "list_all_brands":
+                        brands = get_brands_summary()
+                        tool_result = json.dumps({"brands": brands})
+                    else:
+                        brands = semantic_brand_search(args.get("query", ""))
+                        tool_result = json.dumps({"query": args.get("query", ""), "brands": brands})
+
+                    logger.info("Tool invoked", extra={"tool": tool_call.name, "arguments": args, "result": tool_result})
+
+                    follow_up_messages = messages + list(response.output) + [
+                        {
+                            "type": "function_call_output",
+                            "call_id": tool_call.call_id,
+                            "output": tool_result,
+                        }
+                    ]
+
+                    response = await openai_client.responses.create(
+                        model="gpt-4.1-mini",
+                        instructions=general_prompt,
+                        input=follow_up_messages,
+                        text=output_schema,
+                        max_output_tokens=1000,
+                    )
+
+                    logger.info(
+                        "GeneralAgent follow-up response",
+                        extra={"response": response.model_dump(), "phone_number": phone_number}
+                    )
 
                 output_text = response.output[0].content[0].text
                 output = json.loads(output_text)

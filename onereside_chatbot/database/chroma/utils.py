@@ -13,12 +13,19 @@ chromaClient = chromadb.CloudClient(
     api_key=chroma_api
 )
 
-product_collection = chromaClient.get_collection(
+embedding_fn = OpenAIEmbeddingFunction(
+    api_key=openai_api_key,
+    model_name=TEXT_EMBEDDING_MODEL
+)
+
+product_collection = chromaClient.get_or_create_collection(
     name="product",
-    embedding_function=OpenAIEmbeddingFunction(
-        api_key=openai_api_key,
-        model_name=TEXT_EMBEDDING_MODEL
-    )
+    embedding_function=embedding_fn
+)
+
+brand_collection = chromaClient.get_or_create_collection(
+    name="brands",
+    embedding_function=embedding_fn
 )
 
 
@@ -169,4 +176,83 @@ def delete_product(product_id: str):
             "Error deleting product from vector DB.",
             extra={"product_id": product_id, "error": e}
         )
+        raise e
+
+
+def _build_brand_text(brand: dict) -> str:
+    """Build embedding text from brand fields."""
+    parts = [
+        brand.get("brand_name", ""),
+        brand.get("brand_description", ""),
+        ", ".join(brand.get("categories_offered", [])),
+    ]
+    return " ; ".join(p for p in parts if p)
+
+
+def add_brand(brand: dict):
+    """Add a brand to the brands vector collection."""
+    brand_id = brand["brand_id"]
+    try:
+        brand_collection.add(
+            ids=[brand_id],
+            documents=[_build_brand_text(brand)],
+            metadatas=[{
+                "brand_id": brand_id,
+                "brand_name": brand.get("brand_name", ""),
+                "categories_offered": ", ".join(brand.get("categories_offered", [])),
+            }]
+        )
+        logger.info("Brand added to vector DB.", extra={"brand_id": brand_id})
+    except Exception as e:
+        logger.error("Error adding brand to vector DB.", extra={"brand_id": brand_id, "error": e})
+        raise e
+
+
+def update_brand_embedding(brand: dict):
+    """Update a brand's embedding in the vector DB."""
+    brand_id = brand["brand_id"]
+    try:
+        brand_collection.update(
+            ids=[brand_id],
+            documents=[_build_brand_text(brand)],
+            metadatas=[{
+                "brand_id": brand_id,
+                "brand_name": brand.get("brand_name", ""),
+                "categories_offered": ", ".join(brand.get("categories_offered", [])),
+            }]
+        )
+        logger.info("Brand embedding updated in vector DB.", extra={"brand_id": brand_id})
+    except Exception as e:
+        logger.error("Error updating brand embedding in vector DB.", extra={"brand_id": brand_id, "error": e})
+        raise e
+
+
+def delete_brand(brand_id: str):
+    """Delete a brand from the brands vector collection."""
+    try:
+        brand_collection.delete(ids=[brand_id])
+        logger.info("Deleted brand from vector DB.", extra={"brand_id": brand_id})
+    except Exception as e:
+        logger.error("Error deleting brand from vector DB.", extra={"brand_id": brand_id, "error": e})
+        raise e
+
+
+def semantic_brand_search(query: str, n_results: int = 5) -> list[dict]:
+    """
+    Semantic search over the brands collection.
+    Returns a list of metadata dicts (brand_id, brand_name, categories_offered).
+    """
+    try:
+        response = brand_collection.query(
+            query_texts=[query],
+            n_results=n_results,
+        )
+        results = []
+        if response and response.get("metadatas"):
+            for meta in response["metadatas"][0]:
+                results.append(meta)
+        logger.info("Brand semantic search completed.", extra={"query": query, "results": results})
+        return results
+    except Exception as e:
+        logger.error("Error during brand semantic search.", extra={"query": query, "error": e})
         raise e

@@ -279,6 +279,12 @@ If `results_count` is 0 or categories clearly don't match after both iterations 
 
 If the user asks which brand, company, or designer a shown product is from — answer directly. The brand name is always in the product context (Last Shown Product or shown_products). If it's not there, use get_product_by_id to fetch it. Never say you can't share it or that you keep things unbiased. Just tell them.
 
+**User mentions a brand by name** — call `search_brand` before anything else.
+- "Do you have anything from Baaya?" → call `search_brand("Baaya")` first.
+- "What does Hearty Muse sell?" → call `search_brand("Hearty Muse")` first.
+- If the brand is found → use its description to ask a smarter follow-up or search directly.
+- If the brand is NOT found → deny warmly right away. Do not search for products. Example: "We don't have [Brand] on the platform right now — but I can show you something similar from our partner brands."
+
 ---
 
 ## General Product Questions — Reply Directly, No Tool Call
@@ -656,6 +662,29 @@ get_product_by_id_tool = {
             }
         },
         "required": ["product_id"]
+    }
+}
+
+search_brand_tool = {
+    "type": "function",
+    "name": "search_brand",
+    "strict": False,
+    "description": (
+        "Look up a brand by name to check if it's available on the platform and get its description. "
+        "Use this when the user mentions a specific brand — e.g. 'do you have anything from X?', "
+        "'what does this brand sell?', 'is X brand available?'. "
+        "Call this BEFORE searching for products when a brand is mentioned. "
+        "If the brand is not found, deny early and redirect the user."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "The brand name or description the user mentioned."
+            }
+        },
+        "required": ["query"]
     }
 }
 
