@@ -129,7 +129,7 @@ def update_agent_request_flag(user_id: ObjectId):
     """Function to update the request agent flag."""
     try:
         result = idac.update_one(
-            {"user_id": user_id},
+            {"_id": user_id},
             {
                 "$set": {
                     "agent_request": False
