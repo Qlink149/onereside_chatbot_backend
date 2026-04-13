@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from onereside_chatbot.database.conversation_utils import save_agent_message, set_takeover
-from onereside_chatbot.database.user_utils import get_user_profile
+from onereside_chatbot.database.user_utils import get_user_profile, update_agent_request_flag
 from onereside_chatbot.routes.dependencies import verify_api_key
 from onereside_chatbot.utils.logger_config import logger
 from onereside_chatbot.utils.pubsub import PubSubManager
@@ -193,3 +193,18 @@ async def send_agent_message(
     )
 
     return {"status": "ok", "whatsapp_status": result.get("status")}
+
+
+@router.post("/{phone_number}/resolve-agent-request")
+def resolve_agent_request(phone_number: str, _=Depends(verify_api_key)):
+    """Mark agent_request as resolved (False) once the team has connected with the user."""
+    user = get_user_profile(phone_number)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    updated = update_agent_request_flag(user["_id"])
+    if not updated:
+        raise HTTPException(status_code=400, detail="Failed to resolve agent request")
+
+    logger.info("Agent request resolved", extra={"phone_number": phone_number})
+    return {"status": "ok", "message": "Agent request resolved"}

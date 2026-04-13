@@ -124,3 +124,27 @@ def get_user_by_object_id(user_id: ObjectId):
     except Exception as e:
         logger.exception("Exception occurred while fetching user by id.", extra={"user_id": str(user_id)})
         raise e
+
+def update_agent_request_flag(user_id: ObjectId):
+    """Function to update the request agent flag."""
+    try:
+        result = idac.update_one(
+            {"user_id": user_id},
+            {
+                "$set": {
+                    "agent_request": False
+                }
+            }
+        )
+
+        if result.matched_count == 0:
+            logger.warning("No document found to update", extra={"user_id": str(user_id)})
+
+        return result.modified_count > 0
+
+    except Exception:
+        logger.exception(
+            "Exception occurred while updating agent request flag.",
+            extra={"user_id": str(user_id)}
+        )
+        raise
