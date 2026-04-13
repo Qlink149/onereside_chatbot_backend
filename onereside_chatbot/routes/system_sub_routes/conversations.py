@@ -91,6 +91,7 @@ def get_conversation_history(phone_number: str, _=Depends(verify_api_key)):
 
 
 AGENT_JOINED_MESSAGE = "You are now connected to a live support agent. How can we help you?"
+AGENT_LEFT_MESSAGE = "You're back with the One Reside AI concierge — let me know if there's anything else I can help you with!"
 
 
 @router.post("/{phone_number}/takeover")
@@ -137,14 +138,25 @@ async def release_conversation(phone_number: str, _=Depends(verify_api_key)):
 
     set_takeover(phone_number=phone_number, active=False, taken_by=None)
 
+    send_text_message(
+        phone_number=phone_number,
+        bot_response={"type": "text", "text": AGENT_LEFT_MESSAGE},
+    )
+    save_agent_message(phone_number=phone_number, agent_text=AGENT_LEFT_MESSAGE)
+
     pubsub = PubSubManager()
+    now = int(time.time())
     await pubsub.publish(
         phone_number,
         {
             "type": "release",
             "phone_number": phone_number,
-            "timestamp": int(time.time()),
+            "timestamp": now,
         },
+    )
+    await pubsub.publish(
+        phone_number,
+        {"type": "agent_message", "phone_number": phone_number, "content": AGENT_LEFT_MESSAGE, "timestamp": now},
     )
     logger.info("Conversation released to bot", extra={"phone_number": phone_number})
     return {"status": "ok", "message": "Conversation released back to bot"}
