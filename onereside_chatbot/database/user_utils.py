@@ -104,7 +104,7 @@ def get_all_users(skip: int = 0, limit: int = 20) -> tuple[int, list]:
     """Get paginated list of all users. Returns (total, users)."""
     try:
         total = idac.count_documents({})
-        projection = {"phone_number": 1, "username": 1, "updated_at": 1}
+        projection = {"phone_number": 1, "username": 1, "updated_at": 1, "agent_request": 1}
         users = list(idac.find({}, projection).sort("updated_at", -1).skip(skip).limit(limit))
         logger.info("Fetched users", extra={"skip": skip, "limit": limit, "total": total})
         return total, users
