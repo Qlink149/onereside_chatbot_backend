@@ -20,14 +20,14 @@ class ProductCreate(BaseModel):
     category: str
     type: str
     description: str
-    style_tags: list[str]
-    materials: list[str]
-    colors_available: list[str]
+    style_tags: list[str] | None = None
+    materials: list[str] | None = None
+    colors_available: list[str] | None = None
     size: str | None = None
     media_url: list[dict[str, Any]]
     price_inr: int | None = None
     delivery_weeks: int
-    ideal_for: list[str]
+    ideal_for: list[str] | None = None
     inventory_status: str
 
 
