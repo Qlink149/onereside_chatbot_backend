@@ -1,6 +1,9 @@
+import io
+import re
 import uuid
 from typing import Any
 
+import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from pydantic import BaseModel
 
@@ -111,6 +114,78 @@ async def upload_product_media(
         url = upload_media(file.file, key, file.content_type)
         results.append({"type": media_type, "url": url})
     return {"media": results}
+
+
+@router.post("/bulk-upload", status_code=201)
+async def bulk_upload_products(
+    brand_id: str = Query(...),
+    file: UploadFile = File(...),
+    _: str = Depends(verify_api_key),
+):
+    """Bulk create products from a CSV or Excel sheet. product_id is auto-generated; sheet's product_id and media_url columns are ignored."""
+    if not get_brand_by_id(brand_id):
+        raise HTTPException(status_code=404, detail=f"Brand '{brand_id}' not found")
+
+    content = await file.read()
+    filename = file.filename or ""
+
+    try:
+        if filename.endswith(".csv"):
+            df = pd.read_csv(io.BytesIO(content))
+        elif filename.endswith((".xlsx", ".xls")):
+            df = pd.read_excel(io.BytesIO(content))
+        else:
+            raise HTTPException(status_code=400, detail="Only .csv, .xlsx, and .xls files are supported")
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=400, detail="Could not parse the file. Ensure it is a valid CSV or Excel file.")
+
+    def split_csv_field(value) -> list[str]:
+        if pd.isna(value) or str(value).strip() in ("", "-"):
+            return []
+        return [item.strip() for item in re.split(r",|،", str(value)) if item.strip()]
+
+    def parse_int(value) -> int | None:
+        if pd.isna(value) or str(value).strip() in ("", "-"):
+            return None
+        match = re.search(r"\d+", str(value))
+        return int(match.group()) if match else None
+
+    df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
+
+    results = {"created": [], "failed": []}
+
+    for idx, row in df.iterrows():
+        row_num = int(idx) + 2  # 1-based + header row
+        try:
+            data = {
+                "brand_id": brand_id,
+                "name": str(row.get("name", "")).strip(),
+                "category": str(row.get("category", "")).strip(),
+                "type": str(row.get("type", "")).strip(),
+                "description": str(row.get("description", "")).strip(),
+                "size": str(row.get("size", "")).strip() or None,
+                "style_tags": split_csv_field(row.get("style_tags")),
+                "materials": split_csv_field(row.get("materials")),
+                "colors_available": split_csv_field(row.get("colors_available")),
+                "ideal_for": split_csv_field(row.get("ideal_for")),
+                "price_inr": parse_int(row.get("price_inr")),
+                "delivery_weeks": parse_int(row.get("delivery_weeks")) or 0,
+                "inventory_status": str(row.get("inventory_status", "in_stock")).strip(),
+                "media_url": [],
+            }
+
+            if not data["name"] or not data["category"] or not data["type"]:
+                raise ValueError("name, category, and type are required")
+
+            product = create_product(data)
+            results["created"].append({"row": row_num, "product_id": product["product_id"], "name": product["name"]})
+
+        except Exception as e:
+            results["failed"].append({"row": row_num, "reason": str(e)})
+
+    return results
 
 
 @router.delete("/{product_id}", status_code=204)
