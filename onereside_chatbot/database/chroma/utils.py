@@ -37,14 +37,14 @@ def generate_id():
 def build_search_text(product: dict) -> str:
     """Build a rich text blob for embedding from multiple product fields."""
     parts = [
-        product.get("name", ""),
-        product.get("category", ""),
-        product.get("type", ""),
-        product.get("description", ""),
-        ", ".join(product.get("style_tags", [])),
-        ", ".join(product.get("materials", [])),
-        ", ".join(product.get("ideal_for", [])),
-        ", ".join(product.get("colors_available", [])),
+        product.get("name") or "",
+        product.get("category") or "",
+        product.get("type") or "",
+        product.get("description") or "",
+        ", ".join(product.get("style_tags") or []),
+        ", ".join(product.get("materials") or []),
+        ", ".join(product.get("ideal_for") or []),
+        ", ".join(product.get("colors_available") or []),
     ]
     return " | ".join(p for p in parts if p)
 
