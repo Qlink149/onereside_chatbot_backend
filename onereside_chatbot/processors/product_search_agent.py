@@ -222,13 +222,12 @@ class ProductAgent(Processor):
                         elif item.type == "message":
                             text_message = item
 
-                    # # If the model wrote a conversational message, show it — even if it also made a tool call
-                    # if text_message:
-                    #     break
-
                     # No tool call — model responded directly, exit loop
                     if tool_call is None:
                         break
+
+                    # Tool call present — ignore any text in the same response
+                    text_message = None
 
                     # Tool call detected on first pass — ack before the slow search
                     if iteration == 0:
