@@ -193,6 +193,7 @@ class ProductAgent(Processor):
                 tool_call = None
                 text_message = None
                 search_category = ""
+                search_brand_id = ""
                 current_messages = messages
 
                 while iteration < MAX_SEARCH_ITERATIONS:
@@ -237,6 +238,7 @@ class ProductAgent(Processor):
                     is_new_topic = args.get("is_new_topic", False)
                     if tool_call.name == "search_products":
                         search_category = args.get("category", "")
+                        search_brand_id = args.get("brand_id", "")
 
                     logger.info("Tool invoked", extra={"tool": tool_call.name, "arguments": args, "iteration": iteration + 1})
 
@@ -328,6 +330,7 @@ class ProductAgent(Processor):
                         {"role": "system", "content": f"Recent chat history:\n{chat_history_str}"},
                         {"role": "user", "content": f"User asked for this thing, {user_query}"},
                         {"role": "system", "content": f"Category searched for: {search_category}" if search_category else ""},
+                        {"role": "system", "content": f"Brand requested in this search: {search_brand_id}. Only show a product whose brand_id matches this exactly. If none of the search results match — do not show any product, use the no-results response." if search_brand_id else ""},
                         {"role": "system", "content": f"Search results: {json.dumps(_trim_for_presenter(products))}"},
                         {"role": "system", "content": f"Last Shown Product: {user_profile.get('last_shown_product', '')}"},
                         {"role": "system", "content": shown_summary},
