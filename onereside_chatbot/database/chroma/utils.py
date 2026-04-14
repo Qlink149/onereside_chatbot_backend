@@ -131,9 +131,14 @@ def update_product_embedding(product: dict):
     """Update a product's embedding in the vector DB using the full product data."""
     product_id = product["product_id"]
     try:
-        product_collection.update(
+        product_collection.upsert(
             ids=[product_id],
             documents=[build_search_text(product)],
+            metadatas=[{
+                "brand_id": product.get("brand_id", ""),
+                "category": product.get("category", ""),
+                "product_id": product_id,
+            }]
         )
         logger.info(
             "Product embedding updated in vector DB.",
