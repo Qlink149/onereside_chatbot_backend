@@ -360,7 +360,11 @@ class ProductAgent(Processor):
                         extra={"response": presenter_response.model_dump(), "phone_number": phone_number},
                     )
 
-                    presenter_output_text = presenter_response.output[0].content[0].text
+                    presenter_output_text = next(
+                        item.content[0].text
+                        for item in presenter_response.output
+                        if item.type == "message"
+                    )
                     presenter_output = json.loads(presenter_output_text)
 
                     _apply_needs_update(user_profile, presenter_output)
