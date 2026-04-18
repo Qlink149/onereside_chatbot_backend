@@ -161,10 +161,6 @@ class ProductAgent(Processor):
 
                 # Chat history
                 chat_history = user_profile.get("chat_history", [])[-24:]
-                chat_history_str = "\n".join(
-                    f"{c.get('role','').capitalize()}: {c.get('content','')}"
-                    for c in chat_history
-                )
 
                 shown_products_summary = (
                     json.dumps([{"product_id": p["product_id"], "name": p["name"]} for p in shown_products[-10:]])
@@ -174,13 +170,24 @@ class ProductAgent(Processor):
                 pending_needs = user_profile.get("pending_needs", [])
                 pending_needs_str = json.dumps(pending_needs) if pending_needs else "[]"
 
+                def build_history_turns(history: list) -> list:
+                    turns = []
+                    for c in history:
+                        role = c.get("role", "")
+                        text = c.get("content", "") or ""
+                        if role == "user":
+                            turns.append({"role": "user", "content": [{"type": "input_text", "text": text}]})
+                        elif role == "assistant":
+                            turns.append({"role": "assistant", "content": [{"type": "output_text", "text": text}]})
+                    return turns
+
                 messages = [
                     {"role": "system", "content": f"Username: {username}"},
-                    {"role": "system", "content": f"Recent chat history:\n{chat_history_str}"},
                     {"role": "system", "content": f"Last Shown Product: {user_profile.get('last_shown_product', '')}"},
                     {"role": "system", "content": f"All previously shown products (use product_id to fetch any of them): {shown_products_summary}"},
                     {"role": "system", "content": f"Pending needs (items user wants but hasn't resolved yet): {pending_needs_str}"},
-                    {"role": "user", "content": f"User asked for this thing, {user_query}"},
+                    *build_history_turns(chat_history),
+                    {"role": "user", "content": [{"type": "input_text", "text": user_query}]},
                 ]
 
                 # Recommender loop — max 2 search iterations for self-correction
@@ -327,8 +334,6 @@ class ProductAgent(Processor):
                     presenter_messages = [
                         {"role": "system", "content": f"Username: {username}"},
                         {"role": "system", "content": f"Customer's scanned brand: {scanned_brand_name}"},
-                        {"role": "system", "content": f"Recent chat history:\n{chat_history_str}"},
-                        {"role": "user", "content": f"User asked for this thing, {user_query}"},
                         {"role": "system", "content": f"Category searched for: {search_category}" if search_category else ""},
                         {"role": "system", "content": f"Brand requested in this search: {search_brand_id}. Only show a product whose brand_id matches this exactly. If none of the search results match — do not show any product, use the no-results response." if search_brand_id else ""},
                         {"role": "system", "content": f"Search results: {json.dumps(_trim_for_presenter(products))}"},
@@ -337,14 +342,17 @@ class ProductAgent(Processor):
                         {"role": "system", "content": f"Is new topic: {is_new_topic}. {'Treat this as a fresh first recommendation — ignore prior rejections in chat history.' if is_new_topic else ''}"},
                         {"role": "system", "content": f"Is re-show: {is_reshow}. {'The customer asked to see this product again — show it as requested, acknowledge it naturally.' if is_reshow else ''}"},
                         {"role": "system", "content": f"Is comparison: {is_comparison}. {'The customer wants to compare both products — write a side-by-side comparison message, set product_ids to both IDs, and set product_id to null.' if is_comparison else ''}"},
+                        *build_history_turns(chat_history),
+                        {"role": "user", "content": [{"type": "input_text", "text": user_query}]},
                     ]
 
                     presenter_response = await openai_client.responses.create(
-                        model="gpt-4.1-mini",
+                        model="gpt-5-mini",
                         instructions=product_presenter_prompt,
                         input=presenter_messages,
                         text=presenter_output_schema,
                         max_output_tokens=1000,
+                        reasoning={"effort": "minimal"} 
                     )
 
                     logger.info(
