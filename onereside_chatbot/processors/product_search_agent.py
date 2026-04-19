@@ -422,6 +422,12 @@ class ProductAgent(Processor):
 
                             user_profile["last_shown_product"] = json.dumps(product)
 
+                            # scanned brand exit strategy
+                            scanned_brand_id = brand.get("brand_id", "") if brand else ""
+                            if scanned_brand_id and product.get("brand_id") != scanned_brand_id:
+                                user_profile["past_brand"] = scanned_brand_id
+                                user_profile["current_brand"] = ""
+
                             product_category = (product.get("category") or "").lower()
                             pending = user_profile.get("pending_needs", [])
                             resolved = user_profile.get("resolved_needs", [])
