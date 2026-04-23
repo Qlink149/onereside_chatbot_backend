@@ -201,6 +201,7 @@ class ProductAgent(Processor):
                 text_message = None
                 search_category = ""
                 search_brand_id = ""
+                search_brand_name = ""  # human-readable name for the brand actually searched
                 current_messages = messages
 
                 while iteration < MAX_SEARCH_ITERATIONS:
@@ -255,6 +256,8 @@ class ProductAgent(Processor):
                         if results:
                             # Fetch full brand doc for the top match to include description
                             top = get_brand_by_id(results[0]["brand_id"])
+                            if top:
+                                search_brand_name = top.get("brand_name", "")
                             brand_result = {
                                 "found": True,
                                 "brand_id": top.get("brand_id"),
@@ -331,11 +334,21 @@ class ProductAgent(Processor):
 
                     # Presenter call — trimmed docs only
                     scanned_brand_name = brand.get("brand_name", "") if brand else "None"
+                    # Resolve the human-readable name for the brand that was actually searched.
+                    # search_brand_name is set when recommender called search_brand tool.
+                    # Fallback: if the search used the scanned brand's id, use scanned brand name.
+                    effective_search_brand_name = search_brand_name or (scanned_brand_name if search_brand_id and brand and search_brand_id == brand.get("brand_id", "") else "")
+
                     presenter_messages = [
                         {"role": "system", "content": f"Username: {username}"},
                         {"role": "system", "content": f"Customer's scanned brand: {scanned_brand_name}"},
                         {"role": "system", "content": f"Category searched for: {search_category}" if search_category else ""},
-                        {"role": "system", "content": f"Brand requested in this search: {search_brand_id}. Only show a product whose brand_id matches this exactly. If none of the search results match — do not show any product, use the no-results response." if search_brand_id else ""},
+                        {"role": "system", "content": (
+                            f"Brand requested in this search: {effective_search_brand_name} (brand_id: {search_brand_id}). "
+                            f"Only show a product whose brand_id matches '{search_brand_id}' exactly. "
+                            f"If none of the search results match — do not show any product. "
+                            f"In any denial message, refer to this brand as '{effective_search_brand_name}', NOT the scanned brand."
+                        ) if search_brand_id else ""},
                         {"role": "system", "content": f"Search results: {json.dumps(_trim_for_presenter(products))}"},
                         {"role": "system", "content": f"Last Shown Product: {user_profile.get('last_shown_product', '')}"},
                         {"role": "system", "content": shown_summary},
