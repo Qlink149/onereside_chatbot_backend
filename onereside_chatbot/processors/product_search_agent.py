@@ -457,12 +457,15 @@ class ProductAgent(Processor):
                             user_profile["pending_needs"] = remaining
                             user_profile["resolved_needs"] = resolved
 
+                            has_price = bool(product.get("price_inr"))
+                            cta_title = "Buy" if has_price else "Enquire Now"
+                            caption = "Tap to purchase this product." if has_price else "Tap to enquire about pricing and availability."
                             bot_response.append(
                                 {
                                     "type": "quickreply",
                                     "text": presenter_output.get("message", ""),
-                                    "caption": "Click the cta to buy the product.",
-                                    "options": [{"title": "Buy"}],
+                                    "caption": caption,
+                                    "options": [{"title": cta_title}],
                                     "msgid": f"buy${presenter_output['product_id']}",
                                 }
                             )

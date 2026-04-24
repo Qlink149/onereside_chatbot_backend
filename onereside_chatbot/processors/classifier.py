@@ -48,7 +48,11 @@ class Classifier(Processor):
 
                 if interactive.get("type") == "button_reply":
                     data["button_reply"] = interactive.get("button_reply")
-                    if data["button_reply"]["title"] == "Buy":
+                    button_title = data["button_reply"]["title"]
+                    if button_title == "Buy":
+                        user_profile["service_selected"] = ServiceList.PRODUCT_CHECKOUT.value
+                        return data
+                    if button_title == "Enquire Now":
                         user_profile["service_selected"] = ServiceList.PRODUCT_CHECKOUT.value
                         return data
                     

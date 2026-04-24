@@ -49,6 +49,13 @@ AGENT_REQUEST_RESPONSES = [
     "Our team's been notified and will connect with you soon.\n\nIn the meantime, let me know if there's anything else I can help you with.",
 ]
 
+ENQUIRY_RESPONSES = [
+    "Your enquiry has been noted — our team will reach out to you shortly with pricing and availability details for this piece.\n\nFeel free to keep exploring in the meantime.",
+    "Got it! We've recorded your interest and someone from the One Reside team will be in touch soon with all the details.\n\nHappy to help you find more pieces while you wait.",
+    "Enquiry received — our team will follow up with you shortly on pricing and next steps for this one.\n\nLet me know if there's anything else I can help you with.",
+    "Noted! A member of our team will connect with you soon to share pricing and availability.\n\nIn the meantime, I'm here if you'd like to keep browsing.",
+]
+
 UNSUPPORTED_TYPE_RESPONSES = [
     "I'm sorry, I'm currently unable to process images or voice recordings. Could you please share the details in text?",
     "I can't view that, but if you describe it, I'll help you right away 😊",

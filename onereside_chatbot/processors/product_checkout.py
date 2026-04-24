@@ -1,10 +1,12 @@
 import json
+import random
 
 from onereside_chatbot.processors.abstract_processor import Processor
 from onereside_chatbot.utils.logger_config import logger
-from onereside_chatbot.database.db_utils import get_product_by_id, save_order
+from onereside_chatbot.database.db_utils import get_product_by_id, save_order, save_enquiry
 from onereside_chatbot.utils.razorpay_utils import create_payment_link
 from onereside_chatbot.models.enums import FLowId
+from onereside_chatbot.constants import ENQUIRY_RESPONSES
 
 class ProductCheckoutAgent(Processor):
     """Search a product checkout query."""
@@ -79,17 +81,33 @@ class ProductCheckoutAgent(Processor):
 
                     if msgid.startswith("buy"):
                         ids = msgid.split("$")
-
                         prod_id = ids[1]
-                        
-                        product = user_profile["selected_product_id"] = get_product_by_id(product_id=prod_id)
+                        product = get_product_by_id(product_id=prod_id)
+                        user_profile["selected_product_id"] = product or {}
 
-                        if product and not product.get("price_inr"):
+                        if button_title == "Enquire Now":
+                            if product:
+                                save_enquiry({
+                                    "phone_number": phone_number,
+                                    "username": username,
+                                    "product": {
+                                        "product_id": product.get("product_id"),
+                                        "name": product.get("name"),
+                                        "brand_id": product.get("brand_id"),
+                                        "brand_name": product.get("brand_name", ""),
+                                        "category": product.get("category"),
+                                    },
+                                })
+                                logger.info(
+                                    "Enquiry saved",
+                                    extra={"phone_number": phone_number, "product_id": prod_id},
+                                )
+                            user_profile["agent_request"] = True
                             data["bot_response"] = [
-                               {
+                                {
                                     "type": "text",
-                                    "text": "NULL Price Flow.",
-                                } 
+                                    "text": random.choice(ENQUIRY_RESPONSES),
+                                }
                             ]
                             user_profile["service_selected"] = ""
                             user_profile["selected_product_id"] = {}

@@ -20,6 +20,12 @@ from onereside_chatbot.database.order_utils import (
     update_order_by_payment_id,
 )
 from onereside_chatbot.database.payment_utils import save_payment
+from onereside_chatbot.database.enquiry_utils import (
+    save_enquiry,
+    get_all_enquiries,
+    get_enquiry_by_id,
+    update_enquiry_status,
+)
 
 __all__ = [
     "save_to_mongo",
@@ -34,4 +40,8 @@ __all__ = [
     "update_order_by_payment_link_id",
     "update_order_by_payment_id",
     "save_payment",
+    "save_enquiry",
+    "get_all_enquiries",
+    "get_enquiry_by_id",
+    "update_enquiry_status",
 ]
