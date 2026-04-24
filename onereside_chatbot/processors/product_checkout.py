@@ -102,7 +102,7 @@ class ProductCheckoutAgent(Processor):
                                     "Enquiry saved",
                                     extra={"phone_number": phone_number, "product_id": prod_id},
                                 )
-                            user_profile["agent_request"] = True
+                            
                             data["bot_response"] = [
                                 {
                                     "type": "text",
