@@ -31,9 +31,7 @@ def send_template_message(phone_number: str):
         "source": GUPSHUP_SOURCE,
         "destination": destination,
         "src.name": gupshup_app_name,
-        "template": '{"id": "ed70665a-1d66-47c2-8ae7-122efcbf4d88", "params": []}',  # hirandani
-        # "template": '{"id": "b5c80b2e-7780-423f-b5e2-6b8f42ad20f0", "params": []}',  # ticket.ca
-        "message": '{ "type": "text", "text": "Here is your ticket information from Tickets.ca" }',
+        "template": '{"id": "ed70665a-1d66-47c2-8ae7-122efcbf4d88", "params": []}'
     }
 
     try:

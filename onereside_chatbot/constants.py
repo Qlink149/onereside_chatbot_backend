@@ -56,6 +56,10 @@ ENQUIRY_RESPONSES = [
     "Noted! A member of our team will connect with you soon to share pricing and availability.\n\nIn the meantime, I'm here if you'd like to keep browsing.",
 ]
 
+SUPPORT_NOTIFY_NUMBERS = [
+    "918432563408",
+]
+
 UNSUPPORTED_TYPE_RESPONSES = [
     "I'm sorry, I'm currently unable to process images or voice recordings. Could you please share the details in text?",
     "I can't view that, but if you describe it, I'll help you right away 😊",

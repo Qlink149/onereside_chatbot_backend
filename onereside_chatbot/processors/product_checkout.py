@@ -6,7 +6,8 @@ from onereside_chatbot.utils.logger_config import logger
 from onereside_chatbot.database.db_utils import get_product_by_id, save_order, save_enquiry
 from onereside_chatbot.utils.razorpay_utils import create_payment_link
 from onereside_chatbot.models.enums import FLowId
-from onereside_chatbot.constants import ENQUIRY_RESPONSES
+from onereside_chatbot.constants import ENQUIRY_RESPONSES, SUPPORT_NOTIFY_NUMBERS
+from onereside_chatbot.whatsapp_functions.template.send_product_enquiry_template import send_product_enquiry_template
 
 class ProductCheckoutAgent(Processor):
     """Search a product checkout query."""
@@ -102,7 +103,20 @@ class ProductCheckoutAgent(Processor):
                                     "Enquiry saved",
                                     extra={"phone_number": phone_number, "product_id": prod_id},
                                 )
-                            
+                                for notify_number in SUPPORT_NOTIFY_NUMBERS:
+                                    try:
+                                        send_product_enquiry_template(
+                                            phone_number=notify_number,
+                                            product_name=product.get("name", ""),
+                                            customer_name=username,
+                                            customer_phone=phone_number,
+                                        )
+                                    except Exception as e:
+                                        logger.error(
+                                            "Failed to send product enquiry template",
+                                            extra={"notify_number": notify_number, "error": e},
+                                        )
+
                             data["bot_response"] = [
                                 {
                                     "type": "text",
@@ -112,7 +126,7 @@ class ProductCheckoutAgent(Processor):
                             user_profile["service_selected"] = ""
                             user_profile["selected_product_id"] = {}
                             return data
-
+                        
 
                         if user_profile.get("address"):
 

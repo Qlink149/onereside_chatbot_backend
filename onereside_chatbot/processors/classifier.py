@@ -7,7 +7,8 @@ from onereside_chatbot.processors.abstract_processor import Processor
 from onereside_chatbot.prompt.classifier import (
     one_reside_classifier,
 )
-from onereside_chatbot.constants import UNSUPPORTED_TYPE_RESPONSES, AGENT_REQUEST_RESPONSES
+from onereside_chatbot.constants import UNSUPPORTED_TYPE_RESPONSES, AGENT_REQUEST_RESPONSES, SUPPORT_NOTIFY_NUMBERS
+from onereside_chatbot.whatsapp_functions.template.send_customer_support_template import send_customer_support_template
 from onereside_chatbot.utils.get_openai_responses import get_openai_responses
 from onereside_chatbot.utils.logger_config import logger
 
@@ -144,6 +145,18 @@ class Classifier(Processor):
                             "text": random.choice(AGENT_REQUEST_RESPONSES),
                         }
                     ]
+                    for notify_number in SUPPORT_NOTIFY_NUMBERS:
+                        try:
+                            send_customer_support_template(
+                                phone_number=notify_number,
+                                customer_name=user_profile.get("username", phone_number),
+                                customer_phone=phone_number,
+                            )
+                        except Exception as e:
+                            logger.error(
+                                "Failed to send customer support template",
+                                extra={"notify_number": notify_number, "error": e},
+                            )
                     return data
                 
             else:
