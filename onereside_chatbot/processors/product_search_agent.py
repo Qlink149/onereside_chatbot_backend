@@ -215,7 +215,7 @@ class ProductAgent(Processor):
                         parallel_tool_calls=False,
                         text=output_schema,
                         max_output_tokens=1200,
-                        reasoning={"effort": "minimal"} 
+                        reasoning={"effort": "low"} 
                     )
 
                     logger.info(
