@@ -367,7 +367,7 @@ class ProductAgent(Processor):
                     ]
 
                     presenter_response = await openai_client.responses.create(
-                        model="gpt-5-mini",
+                        model="gpt-5",
                         instructions=product_presenter_prompt,
                         input=presenter_messages,
                         text=presenter_output_schema,
