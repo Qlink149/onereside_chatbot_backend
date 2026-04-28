@@ -29,6 +29,25 @@ brand_collection = chromaClient.get_or_create_collection(
 )
 
 
+def _reconnect():
+    """Recreate the ChromaDB client and collections after a connection timeout."""
+    global chromaClient, product_collection, brand_collection
+    logger.warning("Reconnecting to ChromaDB cloud after timeout.")
+    chromaClient = chromadb.CloudClient(
+        tenant=chorma_tenant,
+        database="OneReside",
+        api_key=chroma_api
+    )
+    product_collection = chromaClient.get_or_create_collection(
+        name="product",
+        embedding_function=embedding_fn
+    )
+    brand_collection = chromaClient.get_or_create_collection(
+        name="brands",
+        embedding_function=embedding_fn
+    )
+
+
 def generate_id():
     """Generate a short unique ID."""
     return f"{uuid.uuid4().hex[:8]}"
@@ -91,40 +110,44 @@ def semantic_search(
     Pass brand_ids to scope to specific brands; omit (or pass None) to search all brands.
     Returns list of matching product IDs.
     """
-    try:
-        where_clause = {"brand_id": {"$in": brand_ids}} if brand_ids else None
+    for attempt in range(2):
+        try:
+            where_clause = {"brand_id": {"$in": brand_ids}} if brand_ids else None
 
-        response = product_collection.query(
-            query_texts=[query],
-            where=where_clause,
-            n_results=n_results
-        )
+            response = product_collection.query(
+                query_texts=[query],
+                where=where_clause,
+                n_results=n_results
+            )
 
-        product_ids = []
+            product_ids = []
 
-        if response and response.get("ids"):
-            for pid in response["ids"][0]:
-                if exclude_ids and pid in exclude_ids:
-                    continue
-                product_ids.append(pid)
+            if response and response.get("ids"):
+                for pid in response["ids"][0]:
+                    if exclude_ids and pid in exclude_ids:
+                        continue
+                    product_ids.append(pid)
 
-        logger.info(
-            "Semantic search completed.",
-            extra={
-                "query": query,
-                "brand_ids": brand_ids,
-                "results": product_ids
-            }
-        )
+            logger.info(
+                "Semantic search completed.",
+                extra={
+                    "query": query,
+                    "brand_ids": brand_ids,
+                    "results": product_ids
+                }
+            )
 
-        return product_ids
+            return product_ids
 
-    except Exception as e:
-        logger.error(
-            "Error during semantic search.",
-            extra={"query": query, "brand_ids": brand_ids, "error": e}
-        )
-        raise e
+        except Exception as e:
+            if attempt == 0 and "408" in str(e):
+                _reconnect()
+                continue
+            logger.error(
+                "Error during semantic search.",
+                extra={"query": query, "brand_ids": brand_ids, "error": e}
+            )
+            raise e
 
 
 def update_product_embedding(product: dict):
@@ -247,17 +270,21 @@ def semantic_brand_search(query: str, n_results: int = 5) -> list[dict]:
     Semantic search over the brands collection.
     Returns a list of metadata dicts (brand_id, brand_name, categories_offered).
     """
-    try:
-        response = brand_collection.query(
-            query_texts=[query],
-            n_results=n_results,
-        )
-        results = []
-        if response and response.get("metadatas"):
-            for meta in response["metadatas"][0]:
-                results.append(meta)
-        logger.info("Brand semantic search completed.", extra={"query": query, "results": results})
-        return results
-    except Exception as e:
-        logger.error("Error during brand semantic search.", extra={"query": query, "error": e})
-        raise e
+    for attempt in range(2):
+        try:
+            response = brand_collection.query(
+                query_texts=[query],
+                n_results=n_results,
+            )
+            results = []
+            if response and response.get("metadatas"):
+                for meta in response["metadatas"][0]:
+                    results.append(meta)
+            logger.info("Brand semantic search completed.", extra={"query": query, "results": results})
+            return results
+        except Exception as e:
+            if attempt == 0 and "408" in str(e):
+                _reconnect()
+                continue
+            logger.error("Error during brand semantic search.", extra={"query": query, "error": e})
+            raise e
