@@ -191,7 +191,7 @@ class ProductAgent(Processor):
                 ]
 
                 # Recommender loop — max 2 search iterations for self-correction
-                MAX_SEARCH_ITERATIONS = 2
+                MAX_SEARCH_ITERATIONS = 3
                 iteration = 0
                 products = []
                 is_new_topic = False
@@ -203,6 +203,7 @@ class ProductAgent(Processor):
                 search_brand_id = ""
                 search_brand_name = ""  # human-readable name for the brand actually searched
                 current_messages = messages
+                brand_search_done = False  # guard: search_brand must not consume search iterations
 
                 while iteration < MAX_SEARCH_ITERATIONS:
                     response = await openai_client.responses.create(
@@ -251,6 +252,11 @@ class ProductAgent(Processor):
                     logger.info("Tool invoked", extra={"tool": tool_call.name, "arguments": args, "iteration": iteration + 1})
 
                     if tool_call.name == "search_brand":
+                        if brand_search_done:
+                            # LLM called search_brand a second time — it already has brand info.
+                            # Break so the presenter handles the (empty) state rather than looping.
+                            break
+                        brand_search_done = True
                         query = args.get("query", "")
                         results = semantic_brand_search(query, n_results=3)
                         if results:
@@ -275,7 +281,8 @@ class ProductAgent(Processor):
                                 "output": json.dumps(brand_result),
                             }
                         ]
-                        iteration += 1
+                        # Do NOT increment iteration — brand lookup is free and must not
+                        # consume one of the two product-search attempts.
                         continue
 
                     if tool_call.name == "compare_products":
