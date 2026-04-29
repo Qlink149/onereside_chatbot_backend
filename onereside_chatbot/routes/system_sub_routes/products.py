@@ -31,6 +31,7 @@ class ProductCreate(BaseModel):
     price_inr: int | None = None
     delivery_weeks: int
     ideal_for: list[str] | None = None
+    deliverables: list[str] | None = None
     inventory_status: str
 
 
@@ -47,6 +48,7 @@ class ProductUpdate(BaseModel):
     price_inr: int | None = None
     delivery_weeks: int | None = None
     ideal_for: list[str] | None = None
+    deliverables: list[str] | None = None
     inventory_status: str | None = None
 
 
@@ -170,6 +172,7 @@ async def bulk_upload_products(
                 "materials": split_csv_field(row.get("materials")),
                 "colors_available": split_csv_field(row.get("colors_available")),
                 "ideal_for": split_csv_field(row.get("ideal_for")),
+                "deliverables": split_csv_field(row.get("deliverables")),
                 "price_inr": parse_int(row.get("price_inr")),
                 "delivery_weeks": parse_int(row.get("delivery_weeks")) or 0,
                 "inventory_status": str(row.get("inventory_status", "in_stock")).strip(),

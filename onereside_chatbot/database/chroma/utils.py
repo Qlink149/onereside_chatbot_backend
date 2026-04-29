@@ -64,6 +64,7 @@ def build_search_text(product: dict) -> str:
         ", ".join(product.get("materials") or []),
         ", ".join(product.get("ideal_for") or []),
         ", ".join(product.get("colors_available") or []),
+        ", ".join(product.get("deliverables") or []),
     ]
     return " | ".join(p for p in parts if p)
 

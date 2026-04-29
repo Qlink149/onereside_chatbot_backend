@@ -117,7 +117,7 @@ def update_product(product_id: str, update_data: dict) -> dict | None:
                 if key:
                     delete_media(key)
 
-        _embedding_fields = {"name", "category", "type", "description", "style_tags", "materials", "ideal_for", "colors_available"}
+        _embedding_fields = {"name", "category", "type", "description", "style_tags", "materials", "ideal_for", "colors_available", "deliverables"}
         if update_data.keys() & _embedding_fields:
             update_product_embedding(result)
 
