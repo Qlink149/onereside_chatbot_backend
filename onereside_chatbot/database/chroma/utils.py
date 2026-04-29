@@ -55,18 +55,22 @@ def generate_id():
 
 def build_search_text(product: dict) -> str:
     """Build a rich text blob for embedding from multiple product fields."""
+    def labeled(label: str, values: list) -> str:
+        joined = ", ".join(values)
+        return f"{label}: {joined}" if joined else ""
+
     parts = [
         product.get("name") or "",
-        product.get("category") or "",
-        product.get("type") or "",
+        f"Category: {product['category']}" if product.get("category") else "",
+        f"Type: {product['type']}" if product.get("type") else "",
         product.get("description") or "",
-        ", ".join(product.get("style_tags") or []),
-        ", ".join(product.get("materials") or []),
-        ", ".join(product.get("ideal_for") or []),
-        ", ".join(product.get("colors_available") or []),
-        ", ".join(product.get("deliverables") or []),
+        labeled("Style tags", product.get("style_tags") or []),
+        labeled("Materials", product.get("materials") or []),
+        labeled("Ideal for", product.get("ideal_for") or []),
+        labeled("Colors available", product.get("colors_available") or []),
+        labeled("Deliverables", product.get("deliverables") or []),
     ]
-    return " | ".join(p for p in parts if p)
+    return " ; ".join(p for p in parts if p)
 
 
 def add_product(product: dict):
@@ -210,11 +214,15 @@ def delete_product(product_id: str):
 
 def _build_brand_text(brand: dict) -> str:
     """Build embedding text from brand fields."""
+    def labeled(label: str, values: list) -> str:
+        joined = ", ".join(values)
+        return f"{label}: {joined}" if joined else ""
+
     parts = [
         brand.get("brand_name", ""),
         brand.get("brand_description", ""),
-        ", ".join(brand.get("categories_offered", [])),
-        ", ".join(brand.get("product_types", [])),
+        labeled("Categories offered", brand.get("categories_offered", [])),
+        labeled("Product types", brand.get("product_types", [])),
     ]
     return " ; ".join(p for p in parts if p)
 
