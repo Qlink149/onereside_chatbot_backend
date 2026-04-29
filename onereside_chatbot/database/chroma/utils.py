@@ -280,18 +280,20 @@ def delete_brand(brand_id: str):
 def semantic_brand_search(query: str, n_results: int = 5) -> list[dict]:
     """
     Semantic search over the brands collection.
-    Returns a list of metadata dicts (brand_id, brand_name, categories_offered).
+    Returns a list of dicts with metadata + the embedded document text.
     """
     for attempt in range(2):
         try:
             response = brand_collection.query(
                 query_texts=[query],
                 n_results=n_results,
+                include=["metadatas", "documents"],
             )
             results = []
-            if response and response.get("metadatas"):
-                for meta in response["metadatas"][0]:
-                    results.append(meta)
+            metadatas = response.get("metadatas", [[]])[0]
+            documents = response.get("documents", [[]])[0]
+            for meta, doc in zip(metadatas, documents):
+                results.append({**meta, "search_text": doc})
             logger.info("Brand semantic search completed.", extra={"query": query, "results": results})
             return results
         except Exception as e:

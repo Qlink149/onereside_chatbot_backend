@@ -115,4 +115,7 @@ Examples:
 
 26. Message: "Show me all architecture firms on the platform" | Active agent: none
 {"category": "product"}
+
+27. Message: "List all the brands you have" | Active agent: none
+{"category": "general"}
 """

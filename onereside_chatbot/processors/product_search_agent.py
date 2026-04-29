@@ -260,16 +260,31 @@ class ProductAgent(Processor):
                         query = args.get("query", "")
                         results = semantic_brand_search(query, n_results=3)
                         if results:
-                            # Fetch full brand doc for the top match to include description
+                            # Full doc for top match (includes description)
                             top = get_brand_by_id(results[0]["brand_id"])
                             if top:
                                 search_brand_name = top.get("brand_name", "")
+                            # All chunks from Chroma including embedded search_text
+                            all_chunks = [
+                                {
+                                    "brand_id": r.get("brand_id"),
+                                    "brand_name": r.get("brand_name"),
+                                    "categories_offered": r.get("categories_offered", "").split(", ") if r.get("categories_offered") else [],
+                                    "product_types": r.get("product_types", "").split(", ") if r.get("product_types") else [],
+                                    "description": r.get("search_text", ""),
+                                }
+                                for r in results
+                            ]
                             brand_result = {
                                 "found": True,
-                                "brand_id": top.get("brand_id"),
-                                "brand_name": top.get("brand_name"),
-                                "brand_description": top.get("brand_description"),
-                                "categories_offered": top.get("categories_offered", []),
+                                "top_match": {
+                                    "brand_id": top.get("brand_id"),
+                                    "brand_name": top.get("brand_name"),
+                                    "brand_description": top.get("brand_description"),
+                                    "categories_offered": top.get("categories_offered", []),
+                                    "product_types": top.get("product_types", []),
+                                },
+                                "all_chunks": all_chunks,
                             } if top else {"found": False}
                         else:
                             brand_result = {"found": False}
