@@ -204,6 +204,7 @@ class ProductAgent(Processor):
                 search_brand_name = ""  # human-readable name for the brand actually searched
                 current_messages = messages
                 brand_search_done = False  # guard: search_brand must not consume search iterations
+                ack_sent = False
 
                 while iteration < MAX_SEARCH_ITERATIONS:
                     response = await openai_client.responses.create(
@@ -239,9 +240,10 @@ class ProductAgent(Processor):
                     # Tool call present — ignore any text in the same response
                     text_message = None
 
-                    # Tool call detected on first pass — ack before the slow search
-                    if iteration == 0:
+                    # Ack once per user message — guard against double-send when search_brand precedes search_products
+                    if not ack_sent:
                         send_text_message(phone_number, {"type": "text", "text": random.choice(ACK_MESSAGES)})
+                        ack_sent = True
 
                     args = json.loads(tool_call.arguments)
                     is_new_topic = args.get("is_new_topic", False)
