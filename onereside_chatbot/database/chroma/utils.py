@@ -214,6 +214,7 @@ def _build_brand_text(brand: dict) -> str:
         brand.get("brand_name", ""),
         brand.get("brand_description", ""),
         ", ".join(brand.get("categories_offered", [])),
+        ", ".join(brand.get("product_types", [])),
     ]
     return " ; ".join(p for p in parts if p)
 
@@ -229,6 +230,7 @@ def add_brand(brand: dict):
                 "brand_id": brand_id,
                 "brand_name": brand.get("brand_name", ""),
                 "categories_offered": ", ".join(brand.get("categories_offered", [])),
+                "product_types": ", ".join(brand.get("product_types", [])),
             }]
         )
         logger.info("Brand added to vector DB.", extra={"brand_id": brand_id})
@@ -248,6 +250,7 @@ def update_brand_embedding(brand: dict):
                 "brand_id": brand_id,
                 "brand_name": brand.get("brand_name", ""),
                 "categories_offered": ", ".join(brand.get("categories_offered", [])),
+                "product_types": ", ".join(brand.get("product_types", [])),
             }]
         )
         logger.info("Brand embedding updated in vector DB.", extra={"brand_id": brand_id})
