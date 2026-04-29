@@ -106,25 +106,17 @@ search_brands_tool = {
 output_schema = {
     "format": {
         "type": "json_schema",
-        "name": "whatsapp_message_list",
+        "name": "whatsapp_message",
         "strict": True,
         "schema": {
             "type": "object",
             "properties": {
-                "messages": {
-                    "type": "array",
-                    "description": "A list of short WhatsApp-style messages.",
-                    "minItems": 1,
-                    "maxItems": 3,
-                    "items": {
-                        "type": "string",
-                        "description": "A single short WhatsApp-style message.",
-                        "minLength": 1,
-                        "maxLength": 256
-                    }
+                "message": {
+                    "type": "string",
+                    "description": "A single short WhatsApp-style message.",
                 }
             },
-            "required": ["messages"],
+            "required": ["message"],
             "additionalProperties": False
         }
     }

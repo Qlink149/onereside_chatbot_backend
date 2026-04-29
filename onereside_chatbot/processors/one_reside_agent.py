@@ -101,7 +101,7 @@ class OneResideAgent(Processor):
             output_text = response.output[0].content[0].text
             output = json.loads(output_text)
 
-            data["bot_response"] = [{"type": "text", "text": msg} for msg in output.get("messages", [])]
+            data["bot_response"] = [{"type": "text", "text": output.get("message", "")}]
             user_profile["service_selected"] = ""
             return data
 
