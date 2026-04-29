@@ -27,7 +27,7 @@ class ProductCreate(BaseModel):
     materials: list[str] | None = None
     colors_available: list[str] | None = None
     size: str | None = None
-    media_url: list[dict[str, Any]]
+    media_url: list[dict[str, Any]] = []
     price_inr: int | None = None
     delivery_weeks: int
     ideal_for: list[str] | None = None
