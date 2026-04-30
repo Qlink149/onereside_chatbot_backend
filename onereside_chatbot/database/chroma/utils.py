@@ -81,27 +81,25 @@ def add_product(product: dict):
     product_id = product["product_id"]
     brand_id = product["brand_id"]
     category = product["category"]
-    try:
-        product_collection.add(
-            ids=[product_id],
-            documents=[build_search_text(product)],
-            metadatas=[{
-                "brand_id": brand_id,
-                "category": category,
-                "product_id": product_id
-            }]
-        )
-
-        logger.info(
-            "Product added to vector DB.",
-            extra={"product_id": product_id, "brand_id": brand_id}
-        )
-    except Exception as e:
-        logger.error(
-            "Error adding product to vector DB.",
-            extra={"product_id": product_id, "error": e}
-        )
-        raise e
+    for attempt in range(2):
+        try:
+            product_collection.add(
+                ids=[product_id],
+                documents=[build_search_text(product)],
+                metadatas=[{
+                    "brand_id": brand_id,
+                    "category": category,
+                    "product_id": product_id
+                }]
+            )
+            logger.info("Product added to vector DB.", extra={"product_id": product_id, "brand_id": brand_id})
+            return
+        except Exception as e:
+            if attempt == 0:
+                _reconnect()
+                continue
+            logger.error("Error adding product to vector DB.", extra={"product_id": product_id, "error": e})
+            raise e
 
 
 def semantic_search(
@@ -158,58 +156,55 @@ def semantic_search(
 def update_product_embedding(product: dict):
     """Update a product's embedding in the vector DB using the full product data."""
     product_id = product["product_id"]
-    try:
-        product_collection.upsert(
-            ids=[product_id],
-            documents=[build_search_text(product)],
-            metadatas=[{
-                "brand_id": product.get("brand_id", ""),
-                "category": product.get("category", ""),
-                "product_id": product_id,
-            }]
-        )
-        logger.info(
-            "Product embedding updated in vector DB.",
-            extra={"product_id": product_id}
-        )
-    except Exception as e:
-        logger.error(
-            "Error updating product embedding in vector DB.",
-            extra={"product_id": product_id, "error": e}
-        )
-        raise e
+    for attempt in range(2):
+        try:
+            product_collection.upsert(
+                ids=[product_id],
+                documents=[build_search_text(product)],
+                metadatas=[{
+                    "brand_id": product.get("brand_id", ""),
+                    "category": product.get("category", ""),
+                    "product_id": product_id,
+                }]
+            )
+            logger.info("Product embedding updated in vector DB.", extra={"product_id": product_id})
+            return
+        except Exception as e:
+            if attempt == 0:
+                _reconnect()
+                continue
+            logger.error("Error updating product embedding in vector DB.", extra={"product_id": product_id, "error": e})
+            raise e
 
 
 def delete_brand_products(brand_id: str):
     """Delete all product vectors for a brand."""
-    try:
-        product_collection.delete(where={"brand_id": brand_id})
-        logger.info(
-            "Deleted brand products from vector DB.",
-            extra={"brand_id": brand_id}
-        )
-    except Exception as e:
-        logger.error(
-            "Error deleting brand products from vector DB.",
-            extra={"brand_id": brand_id, "error": e}
-        )
-        raise e
+    for attempt in range(2):
+        try:
+            product_collection.delete(where={"brand_id": brand_id})
+            logger.info("Deleted brand products from vector DB.", extra={"brand_id": brand_id})
+            return
+        except Exception as e:
+            if attempt == 0:
+                _reconnect()
+                continue
+            logger.error("Error deleting brand products from vector DB.", extra={"brand_id": brand_id, "error": e})
+            raise e
 
 
 def delete_product(product_id: str):
     """Delete a single product from vector DB."""
-    try:
-        product_collection.delete(ids=[product_id])
-        logger.info(
-            "Deleted product from vector DB.",
-            extra={"product_id": product_id}
-        )
-    except Exception as e:
-        logger.error(
-            "Error deleting product from vector DB.",
-            extra={"product_id": product_id, "error": e}
-        )
-        raise e
+    for attempt in range(2):
+        try:
+            product_collection.delete(ids=[product_id])
+            logger.info("Deleted product from vector DB.", extra={"product_id": product_id})
+            return
+        except Exception as e:
+            if attempt == 0:
+                _reconnect()
+                continue
+            logger.error("Error deleting product from vector DB.", extra={"product_id": product_id, "error": e})
+            raise e
 
 
 def _build_brand_text(brand: dict) -> str:
@@ -230,51 +225,66 @@ def _build_brand_text(brand: dict) -> str:
 def add_brand(brand: dict):
     """Add a brand to the brands vector collection."""
     brand_id = brand["brand_id"]
-    try:
-        brand_collection.add(
-            ids=[brand_id],
-            documents=[_build_brand_text(brand)],
-            metadatas=[{
-                "brand_id": brand_id,
-                "brand_name": brand.get("brand_name", ""),
-                "categories_offered": ", ".join(brand.get("categories_offered", [])),
-                "product_types": ", ".join(brand.get("product_types", [])),
-            }]
-        )
-        logger.info("Brand added to vector DB.", extra={"brand_id": brand_id})
-    except Exception as e:
-        logger.error("Error adding brand to vector DB.", extra={"brand_id": brand_id, "error": e})
-        raise e
+    for attempt in range(2):
+        try:
+            brand_collection.add(
+                ids=[brand_id],
+                documents=[_build_brand_text(brand)],
+                metadatas=[{
+                    "brand_id": brand_id,
+                    "brand_name": brand.get("brand_name", ""),
+                    "categories_offered": ", ".join(brand.get("categories_offered", [])),
+                    "product_types": ", ".join(brand.get("product_types", [])),
+                }]
+            )
+            logger.info("Brand added to vector DB.", extra={"brand_id": brand_id})
+            return
+        except Exception as e:
+            if attempt == 0:
+                _reconnect()
+                continue
+            logger.error("Error adding brand to vector DB.", extra={"brand_id": brand_id, "error": e})
+            raise e
 
 
 def update_brand_embedding(brand: dict):
     """Update a brand's embedding in the vector DB."""
     brand_id = brand["brand_id"]
-    try:
-        brand_collection.update(
-            ids=[brand_id],
-            documents=[_build_brand_text(brand)],
-            metadatas=[{
-                "brand_id": brand_id,
-                "brand_name": brand.get("brand_name", ""),
-                "categories_offered": ", ".join(brand.get("categories_offered", [])),
-                "product_types": ", ".join(brand.get("product_types", [])),
-            }]
-        )
-        logger.info("Brand embedding updated in vector DB.", extra={"brand_id": brand_id})
-    except Exception as e:
-        logger.error("Error updating brand embedding in vector DB.", extra={"brand_id": brand_id, "error": e})
-        raise e
+    for attempt in range(2):
+        try:
+            brand_collection.update(
+                ids=[brand_id],
+                documents=[_build_brand_text(brand)],
+                metadatas=[{
+                    "brand_id": brand_id,
+                    "brand_name": brand.get("brand_name", ""),
+                    "categories_offered": ", ".join(brand.get("categories_offered", [])),
+                    "product_types": ", ".join(brand.get("product_types", [])),
+                }]
+            )
+            logger.info("Brand embedding updated in vector DB.", extra={"brand_id": brand_id})
+            return
+        except Exception as e:
+            if attempt == 0:
+                _reconnect()
+                continue
+            logger.error("Error updating brand embedding in vector DB.", extra={"brand_id": brand_id, "error": e})
+            raise e
 
 
 def delete_brand(brand_id: str):
     """Delete a brand from the brands vector collection."""
-    try:
-        brand_collection.delete(ids=[brand_id])
-        logger.info("Deleted brand from vector DB.", extra={"brand_id": brand_id})
-    except Exception as e:
-        logger.error("Error deleting brand from vector DB.", extra={"brand_id": brand_id, "error": e})
-        raise e
+    for attempt in range(2):
+        try:
+            brand_collection.delete(ids=[brand_id])
+            logger.info("Deleted brand from vector DB.", extra={"brand_id": brand_id})
+            return
+        except Exception as e:
+            if attempt == 0:
+                _reconnect()
+                continue
+            logger.error("Error deleting brand from vector DB.", extra={"brand_id": brand_id, "error": e})
+            raise e
 
 
 def semantic_brand_search(query: str, n_results: int = 5) -> list[dict]:
