@@ -66,27 +66,25 @@ class OneResideAgent(Processor):
 
             logger.info("OneReside agent response", extra={"response": response.model_dump(), "phone_number": phone_number})
 
-            tool_call = None
-            for item in response.output:
-                if item.type == "function_call":
-                    tool_call = item
+            tool_calls = [item for item in response.output if item.type == "function_call"]
 
-            if tool_call:
-                args = json.loads(tool_call.arguments)
-                if tool_call.name == "list_all_brands":
-                    tool_result = self.handle_list_all_brands()
-                else:
-                    tool_result = self.handle_search_brands(args.get("query", ""))
+            if tool_calls:
+                tool_outputs = []
+                for tool_call in tool_calls:
+                    args = json.loads(tool_call.arguments)
+                    if tool_call.name == "list_all_brands":
+                        tool_result = self.handle_list_all_brands()
+                    else:
+                        tool_result = self.handle_search_brands(args.get("query", ""))
 
-                logger.info("Tool invoked", extra={"tool": tool_call.name, "arguments": args, "result": tool_result})
-
-                follow_up_messages = messages + list(response.output) + [
-                    {
+                    logger.info("Tool invoked", extra={"tool": tool_call.name, "arguments": args, "result": tool_result})
+                    tool_outputs.append({
                         "type": "function_call_output",
                         "call_id": tool_call.call_id,
                         "output": tool_result,
-                    }
-                ]
+                    })
+
+                follow_up_messages = messages + list(response.output) + tool_outputs
 
                 response = await openai_client.responses.create(
                     model="gpt-4.1-mini",
