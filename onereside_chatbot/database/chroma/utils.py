@@ -145,7 +145,7 @@ def semantic_search(
             return product_ids
 
         except Exception as e:
-            if attempt == 0 and "408" in str(e):
+            if attempt == 0:
                 _reconnect()
                 continue
             logger.error(
@@ -297,7 +297,7 @@ def semantic_brand_search(query: str, n_results: int = 5) -> list[dict]:
             logger.info("Brand semantic search completed.", extra={"query": query, "results": results})
             return results
         except Exception as e:
-            if attempt == 0 and "408" in str(e):
+            if attempt == 0:
                 _reconnect()
                 continue
             logger.error("Error during brand semantic search.", extra={"query": query, "error": e})
