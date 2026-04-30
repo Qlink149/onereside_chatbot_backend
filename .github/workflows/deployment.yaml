@@ -33,7 +33,7 @@ jobs:
       - name: Build and push Docker image
         run: |
           export DOCKER_BUILDKIT=1
-          REGISTRY_PATH="blr.vultrcr.com/qlink01/onereside_bot"
+          REGISTRY_PATH="ewr.vultrcr.com/qlink01/onereside_bot"
           docker build -t $REGISTRY_PATH:latest .
           docker push $REGISTRY_PATH:latest
 
@@ -48,7 +48,7 @@ jobs:
             docker login -u ${{ secrets.VULTR_REGISTRY_USERNAME }} -p ${{ secrets.VULTR_REGISTRY_PASSWORD }} ${{ secrets.VULTR_REGISTRY_URL }}
 
             # Pull the latest image
-            docker pull blr.vultrcr.com/qlink01/onereside_bot:latest
+            docker pull ewr.vultrcr.com/qlink01/onereside_bot:latest
 
             # Stop and remove existing container if it exists
             docker stop qlink || true
@@ -81,7 +81,7 @@ jobs:
               -e R2_ENDPOINT=${{ secrets.R2_ENDPOINT }} \
               -e R2_BUCKET=${{ secrets.R2_BUCKET }} \
               -e R2_PUBLIC_URL=${{ secrets.R2_PUBLIC_URL }} \
-              blr.vultrcr.com/qlink01/onereside_bot
+              ewr.vultrcr.com/qlink01/onereside_bot
 
       - name: Cleanup Old Images
         uses: appleboy/ssh-action@master
