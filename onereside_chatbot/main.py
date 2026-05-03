@@ -19,6 +19,16 @@ from onereside_chatbot.database.db_utils import (
 from onereside_chatbot.utils.format_chathistory import format_user
 from onereside_chatbot.utils.pubsub import PubSubManager
 from onereside_chatbot.utils.env_load import razorpay_webhook_secrete
+from onereside_chatbot.constants import SUPPORT_NOTIFY_NUMBERS
+from onereside_chatbot.whatsapp_functions.template.send_user_order_payment_failed import (
+    send_user_order_payment_failed,
+)
+from onereside_chatbot.whatsapp_functions.template.send_user_order_payment_received import (
+    send_user_order_payment_received,
+)
+from onereside_chatbot.whatsapp_functions.template.send_admin_order_payment_received import (
+    send_admin_order_payment_received,
+)
 from onereside_chatbot.models.service_list import ServiceList
 from onereside_chatbot.pipelines.inference_pipeline import (
     InitialPipeline,
@@ -116,10 +126,45 @@ async def razorpay_webhook(request: Request):
             })
 
         if payment_link_id:
-            update_order_by_payment_link_id(
+            updated_order = update_order_by_payment_link_id(
                 payment_link_id=payment_link_id,
                 update_data=order_update,
             )
+
+            if updated_order:
+                user_phone = updated_order.get("phone_number", "")
+                product_name = updated_order.get("product", {}).get("name", "your product")
+                amount_inr = updated_order.get("amount_inr", 0)
+                amount = f"Rs. {int(float(amount_inr)):,}"
+                customer_name = updated_order.get("username", "")
+
+                try:
+                    if event == "payment_link.paid":
+                        send_user_order_payment_received(
+                            phone_number=user_phone,
+                            amount=amount,
+                            product_name=product_name,
+                            order_id=payment_link_id,
+                        )
+                        for admin in SUPPORT_NOTIFY_NUMBERS:
+                            send_admin_order_payment_received(
+                                admin_phone=admin,
+                                order_id=payment_link_id,
+                                customer_name=customer_name,
+                                customer_phone=user_phone,
+                            )
+                    else:
+                        send_user_order_payment_failed(
+                            phone_number=user_phone,
+                            amount=amount,
+                            product_name=product_name,
+                            order_id=payment_link_id,
+                        )
+                except Exception as notify_err:
+                    logger.error(
+                        "Failed to send payment WhatsApp notification",
+                        extra={"error": notify_err, "event": event, "payment_link_id": payment_link_id},
+                    )
 
     return {"status": "ok"}
 

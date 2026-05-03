@@ -21,6 +21,15 @@ from onereside_chatbot.whatsapp_functions.send_text_message import send_text_mes
 from onereside_chatbot.utils.logger_config import logger
 import time
 from onereside_chatbot.whatsapp_functions.flow.send_address_flow import send_address_flow
+from onereside_chatbot.whatsapp_functions.template.send_user_order_payment_failed import (
+    send_user_order_payment_failed,
+)
+from onereside_chatbot.whatsapp_functions.template.send_user_order_payment_received import (
+    send_user_order_payment_received,
+)
+from onereside_chatbot.whatsapp_functions.template.send_admin_order_payment_received import (
+    send_admin_order_payment_received,
+)
 
 
 class ResponseManager:
@@ -48,6 +57,7 @@ class ResponseManager:
         self.register_handler("quickreply", self._handle_quick_reply)
         self.register_handler("skip", self._handle_skip)
         self.register_handler("cta_url", self._handle_url)
+        self.register_handler("template", self._handle_template)
 
     def register_handler(self, response_type, handler):
         """Registers a handler for a specific response type.
@@ -138,6 +148,33 @@ class ResponseManager:
             return send_address_flow(phone_number=phone_number)
         else:
             raise ValueError(f"Unknown flow: {flow_name}")
+
+    def _handle_template(self, phone_number, bot_response):
+        template_name = bot_response["template"]
+
+        if template_name == "user_order_payment_failed":
+            return send_user_order_payment_failed(
+                phone_number=phone_number,
+                amount=bot_response["amount"],
+                product_name=bot_response["product_name"],
+                order_id=bot_response["order_id"],
+            )
+        elif template_name == "user_order_payment_received":
+            return send_user_order_payment_received(
+                phone_number=phone_number,
+                amount=bot_response["amount"],
+                product_name=bot_response["product_name"],
+                order_id=bot_response["order_id"],
+            )
+        elif template_name == "admin_order_payment_received":
+            return send_admin_order_payment_received(
+                admin_phone=phone_number,
+                order_id=bot_response["order_id"],
+                customer_name=bot_response["customer_name"],
+                customer_phone=bot_response["customer_phone"],
+            )
+        else:
+            raise ValueError(f"Unknown template: {template_name}")
 
     def _handle_media(self, phone_number, bot_response):
         """Processes media response.
