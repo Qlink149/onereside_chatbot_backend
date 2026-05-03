@@ -88,11 +88,11 @@ async def razorpay_webhook(request: Request):
 
     payload = json.loads(body)
     event = payload.get("event", "")
-    logger.info("Razorpay webhook received", extra={"event": event})
+    logger.info("Razorpay webhook received", extra={"event": event, "payload": payload})
 
     rz_payload = payload.get("payload", {})
 
-    PAYMENT_LINK_EVENTS = {"payment_link.paid", "payment_link.cancelled", "payment_link.expired"}
+    PAYMENT_LINK_EVENTS = {"payment_link.paid", "payment_link.cancelled", "payment_link.expired", "payment.failed"}
 
     if event in PAYMENT_LINK_EVENTS:
         payment_link_entity = rz_payload.get("payment_link", {}).get("entity", {})
@@ -137,6 +137,7 @@ async def razorpay_webhook(request: Request):
                 amount_inr = updated_order.get("amount_inr", 0)
                 amount = f"Rs. {int(float(amount_inr)):,}"
                 customer_name = updated_order.get("username", "")
+                order_id = updated_order.get("order_id", payment_link_id)
 
                 try:
                     if event == "payment_link.paid":
@@ -144,12 +145,12 @@ async def razorpay_webhook(request: Request):
                             phone_number=user_phone,
                             amount=amount,
                             product_name=product_name,
-                            order_id=payment_link_id,
+                            order_id=order_id,
                         )
                         for admin in SUPPORT_NOTIFY_NUMBERS:
                             send_admin_order_payment_received(
                                 admin_phone=admin,
-                                order_id=payment_link_id,
+                                order_id=order_id,
                                 customer_name=customer_name,
                                 customer_phone=user_phone,
                             )
@@ -158,7 +159,7 @@ async def razorpay_webhook(request: Request):
                             phone_number=user_phone,
                             amount=amount,
                             product_name=product_name,
-                            order_id=payment_link_id,
+                            order_id=order_id,
                         )
                 except Exception as notify_err:
                     logger.error(

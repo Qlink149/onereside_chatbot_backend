@@ -15,5 +15,6 @@ idac = db["users"]
 
 payments = db["payments"]
 orders = db["orders"]
+orders.create_index("order_id", unique=True, sparse=True)
 refunds = db["refunds"]
 enquiries = db["enquiries"]

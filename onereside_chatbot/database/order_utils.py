@@ -1,7 +1,10 @@
+import secrets
 import time
+from datetime import datetime, timezone
 
 from bson import ObjectId
 from pymongo import ReturnDocument, DESCENDING
+from pymongo.errors import DuplicateKeyError
 
 from onereside_chatbot.database.collections import orders
 from onereside_chatbot.utils.logger_config import logger
@@ -15,6 +18,7 @@ _LIST_PROJECTION = {
     "amount_inr": 1,
     "payment_status": 1,
     "payment_link_id": 1,
+    "order_id": 1,
     "created_at": 1,
 }
 
@@ -24,6 +28,7 @@ def _build_query(
     brand_id: str | None = None,
     product_id: str | None = None,
     phone_number: str | None = None,
+    order_id: str | None = None,
 ) -> dict:
     query = {}
     if payment_status:
@@ -34,6 +39,8 @@ def _build_query(
         query["product.product_id"] = product_id
     if phone_number:
         query["phone_number"] = phone_number
+    if order_id:
+        query["order_id"] = order_id
     return query
 
 
@@ -43,10 +50,11 @@ def get_all_orders(
     payment_status: str | None = None,
     brand_id: str | None = None,
     product_id: str | None = None,
+    order_id: str | None = None,
 ) -> tuple[int, list]:
     """Get paginated orders with optional filters. Returns (total, orders)."""
     try:
-        query = _build_query(payment_status=payment_status, brand_id=brand_id, product_id=product_id)
+        query = _build_query(payment_status=payment_status, brand_id=brand_id, product_id=product_id, order_id=order_id)
         total = orders.count_documents(query)
         docs = list(orders.find(query, _LIST_PROJECTION).sort("created_at", DESCENDING).skip(skip).limit(limit))
         for d in docs:
@@ -113,17 +121,30 @@ def get_order_by_id(order_id: ObjectId) -> dict | None:
         raise e
 
 
+def _generate_order_id() -> str:
+    date_str = datetime.now(timezone.utc).strftime("%Y%m%d")
+    suffix = secrets.token_hex(3).upper()
+    return f"ORD-{date_str}-{suffix}"
+
+
 def save_order(order_data: dict) -> str:
-    """Save a new order to the orders collection. Returns the inserted order _id as string."""
+    """Save a new order to the orders collection. Returns the human-readable order_id."""
     try:
         order_data["created_at"] = int(time.time())
         order_data["updated_at"] = int(time.time())
-        result = orders.insert_one(order_data)
-        logger.info(
-            "Order saved successfully",
-            extra={"inserted_id": str(result.inserted_id)},
-        )
-        return str(result.inserted_id)
+        for _ in range(5):
+            order_id = _generate_order_id()
+            order_data["order_id"] = order_id
+            try:
+                result = orders.insert_one(order_data)
+                logger.info(
+                    "Order saved successfully",
+                    extra={"order_id": order_id, "inserted_id": str(result.inserted_id)},
+                )
+                return order_id
+            except DuplicateKeyError:
+                logger.warning("Order ID collision, retrying", extra={"order_id": order_id})
+        raise RuntimeError("Failed to generate a unique order_id after 5 attempts")
     except Exception as e:
         logger.exception("Failed to save order.", extra={"exception": e})
         raise e
@@ -139,7 +160,7 @@ def update_order_by_payment_link_id(payment_link_id: str, update_data: dict) -> 
             return_document=ReturnDocument.AFTER,
         )
         if result:
-            result.pop("_id", None)
+            result["id"] = str(result["_id"])
             logger.info(
                 "Order updated by payment_link_id successfully",
                 extra={"payment_link_id": payment_link_id},

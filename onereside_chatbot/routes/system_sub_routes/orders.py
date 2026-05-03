@@ -21,11 +21,12 @@ def list_orders(
     payment_status: str | None = Query(None),
     brand_id: str | None = Query(None),
     product_id: str | None = Query(None),
+    order_id: str | None = Query(None),
     _: str = Depends(verify_api_key),
 ):
     """List all orders with optional filters and pagination."""
     skip = (page - 1) * limit
-    total, docs = get_all_orders(skip=skip, limit=limit, payment_status=payment_status, brand_id=brand_id, product_id=product_id)
+    total, docs = get_all_orders(skip=skip, limit=limit, payment_status=payment_status, brand_id=brand_id, product_id=product_id, order_id=order_id)
     return {"total": total, "page": page, "limit": limit, "data": docs}
 
 
