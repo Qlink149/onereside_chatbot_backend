@@ -28,7 +28,7 @@ def send_admin_order_payment_received(admin_phone: str, order_id: str, customer_
         "source": GUPSHUP_SOURCE,
         "destination": destination,
         "src.name": gupshup_app_name,
-        "template": f'{{"id": "5c640a4c-3de4-4aa0-b633-02508bf798c5", "params": ["{order_id}", "{customer_name}", "{customer_phone}"]}}',
+        "template": f'{{"id": "5c640a4c-3de4-4aa0-b633-02508bf798c5", "params": ["*{order_id}*", "*{customer_name}*", "*{customer_phone}*"]}}',
     }
 
     try:

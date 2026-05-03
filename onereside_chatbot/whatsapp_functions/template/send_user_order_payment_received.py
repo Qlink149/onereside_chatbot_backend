@@ -28,7 +28,7 @@ def send_user_order_payment_received(phone_number: str, amount: str, product_nam
         "source": GUPSHUP_SOURCE,
         "destination": destination,
         "src.name": gupshup_app_name,
-        "template": f'{{"id": "4daf0104-83e6-4f48-8348-4fcc5393098e", "params": ["{amount}", "{product_name}", "{order_id}"]}}',
+        "template": f'{{"id": "4daf0104-83e6-4f48-8348-4fcc5393098e", "params": ["*{amount}*", "*{product_name}*", "*{order_id}*"]}}',
     }
 
     try:
