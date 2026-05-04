@@ -213,6 +213,7 @@ class ProductAgent(Processor):
                         input=current_messages,
                         tools=[search_products_tool, get_product_by_id_tool, compare_products_tool, search_brand_tool],
                         tool_choice="auto",
+                        temperature=0.25,
                         parallel_tool_calls=False,
                         text=output_schema,
                         max_output_tokens=1200,
@@ -387,6 +388,7 @@ class ProductAgent(Processor):
                         model="gpt-5",
                         instructions=product_presenter_prompt,
                         input=presenter_messages,
+                        temperature=0.3,
                         text=presenter_output_schema,
                         max_output_tokens=1000,
                         reasoning={"effort": "minimal"} 
