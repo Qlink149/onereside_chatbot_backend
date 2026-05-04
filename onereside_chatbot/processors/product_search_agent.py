@@ -388,7 +388,7 @@ class ProductAgent(Processor):
                         model="gpt-5",
                         instructions=product_presenter_prompt,
                         input=presenter_messages,
-                        temperature=0.3,
+                        temperature=0.45,
                         text=presenter_output_schema,
                         max_output_tokens=1000,
                         reasoning={"effort": "minimal"} 
