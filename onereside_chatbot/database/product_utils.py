@@ -190,6 +190,8 @@ def get_catalog_metadata(brand_id: str = None) -> dict:
                 "style_tags": brand_style_tags,
                 "ideal_for": brand_ideal_for,
                 "all_categories": all_categories,
+                "all_style_tags": all_style_tags,
+                "all_ideal_for": all_ideal_for,
             }
 
         return {

@@ -17,9 +17,25 @@ Your job is to understand someone well enough that when you do show them somethi
 
 ## The Catalog
 
+This is the **complete list** of what One Reside currently carries. **Refer to this before every response.**
+
 {catalog_metadata_section}
 
-Use this to ask sharp, specific questions. Never generic ones.
+**This list is exhaustive — treat it as the ground truth of what exists on the platform. Refer to all three fields before every response.**
+
+**Categories — existence check:**
+- If the product type matches a category (exact or close synonym) → proceed normally.
+- If it does NOT appear → do NOT search, do NOT ask follow-up questions. Deny immediately: one or two sentences, offer to connect with the team or explore a different direction. Never loop back on a product type that isn't here.
+
+**Style tags — use to ask smarter questions:**
+- When asking about style or vibe, draw from the style tags list to offer specific, real options rather than open-ended questions.
+- If the user describes a style not in the list (e.g. "industrial", "coastal"), don't block them — map it to the closest available tag and search.
+
+**Room types — use to sharpen room questions:**
+- Draw from the ideal_for list when asking which room a product is for.
+- If the user mentions a room not in the list, still search — just don't filter by room type.
+
+Use these three fields to ask sharper, more informed questions. Categories are the hard gate. Style and room are guides — always try to find the closest match and search.
 
 ---
 
@@ -281,7 +297,7 @@ When `pending_needs` contains items not yet resolved — after confirming or res
 
 ---
 
-Never claim a product doesn't exist or a category isn't available *before* searching. Always search first.
+Never claim a product doesn't exist or a category isn't available before checking the catalog list above or searching. Always verify first.
 
 When you get a function_call_output: you see a count, the categories found, and a hint — no product details. Use `categories_found` to check if results match what the user asked for.
 
@@ -529,14 +545,30 @@ def build_product_recommender_prompt(brand: dict = None, catalog_metadata: dict 
     style_tags = catalog_metadata.get("style_tags", [])
     ideal_for = catalog_metadata.get("ideal_for", [])
     all_categories = catalog_metadata.get("all_categories", [])
+    all_style_tags = catalog_metadata.get("all_style_tags", [])
+    all_ideal_for = catalog_metadata.get("all_ideal_for", [])
 
     parts = []
-    if categories:
-        parts.append(f"Categories: {', '.join(categories)}")
-    if style_tags:
-        parts.append(f"Style tags: {', '.join(style_tags)}")
-    if ideal_for:
-        parts.append(f"Room types: {', '.join(ideal_for)}")
+    if brand and all_categories:
+        # Brand context: show brand-specific first, then full platform
+        if categories:
+            parts.append(f"This brand's categories: {', '.join(categories)}")
+        parts.append(f"Full platform categories (all brands): {', '.join(all_categories)}")
+        if style_tags:
+            parts.append(f"This brand's style tags: {', '.join(style_tags)}")
+        if all_style_tags:
+            parts.append(f"Full platform style tags (all brands): {', '.join(all_style_tags)}")
+        if ideal_for:
+            parts.append(f"This brand's room types: {', '.join(ideal_for)}")
+        if all_ideal_for:
+            parts.append(f"Full platform room types (all brands): {', '.join(all_ideal_for)}")
+    else:
+        if categories:
+            parts.append(f"Categories: {', '.join(categories)}")
+        if style_tags:
+            parts.append(f"Style tags: {', '.join(style_tags)}")
+        if ideal_for:
+            parts.append(f"Room types: {', '.join(ideal_for)}")
     catalog_metadata_section = "\n".join(parts) if parts else "Catalog metadata unavailable."
 
     if brand:
