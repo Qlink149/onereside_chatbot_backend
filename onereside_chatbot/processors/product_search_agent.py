@@ -101,7 +101,7 @@ class ProductAgent(Processor):
                 order = {pid: i for i, pid in enumerate(filtered_ids)}
                 docs = list(pd.find(q, {"_id": 0, "media_url": 0}))
                 docs.sort(key=lambda p: order.get(p["product_id"], 999))
-                return docs[:5]
+                return docs
 
             # Step 1: search within brand (if brand_id provided)
             product_ids = semantic_search(
