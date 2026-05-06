@@ -388,7 +388,6 @@ class ProductAgent(Processor):
                             f"Brand requested in this search: {brand_name} (brand_id: {brand_id}). "
                             f"Only show a product whose brand_id matches '{brand_id}' exactly. "
                             f"If none of the search results match — do not show any product. "
-                            f"In any denial message, refer to this brand as '{brand_name}', NOT the scanned brand."
                         ) if brand_id else ""},
                         {"role": "system", "content": f"Search results: {json.dumps(_trim_for_presenter(products))}"},
                         {"role": "system", "content": f"Last Shown Product: {user_profile.get('last_shown_product', '')}"},
