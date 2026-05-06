@@ -384,12 +384,12 @@ class ProductAgent(Processor):
                     ]
 
                     presenter_response = await openai_client.responses.create(
-                        model="gpt-5",
+                        model="gpt-5.2",
                         instructions=product_presenter_prompt,
                         input=presenter_messages,
                         text=presenter_output_schema,
                         max_output_tokens=1000,
-                        reasoning={"effort": "minimal"} 
+                        reasoning={"effort": "low"} 
                     )
 
                     logger.info(
