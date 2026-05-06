@@ -135,6 +135,7 @@ class ProductAgent(Processor):
         user_profile = data["user_profile"]
         username = user_profile["username"]
         brand = data.get("brand")
+        requested_brand = user_profile.get("requested_brand")  # brand user asked for in a prior turn
 
         if not self.should_run(data):
             logger.info(
@@ -186,6 +187,12 @@ class ProductAgent(Processor):
                     {"role": "system", "content": f"Last Shown Product: {user_profile.get('last_shown_product', '')}"},
                     {"role": "system", "content": f"All previously shown products (use product_id to fetch any of them): {shown_products_summary}"},
                     {"role": "system", "content": f"Pending needs (items user wants but hasn't resolved yet): {pending_needs_str}"},
+                    {"role": "system", "content": (
+                        f"Active brand from this conversation: {requested_brand['brand_name']} (brand_id: {requested_brand['brand_id']}). "
+                        f"When the user's message doesn't mention a specific brand, search within this brand first. "
+                        f"Fall back cross-brand only if this brand returns no results. "
+                        f"Override only when the user explicitly names a different brand or asks for cross-brand options."
+                    ) if requested_brand and not brand else ""},
                     *build_history_turns(chat_history),
                     {"role": "user", "content": [{"type": "input_text", "text": user_query}]},
                 ]
@@ -202,6 +209,7 @@ class ProductAgent(Processor):
                 search_category = ""
                 search_brand_id = ""
                 search_brand_name = ""  # human-readable name for the brand actually searched
+                search_brand_id_from_tool = ""  # brand_id discovered via search_brand tool call
                 current_messages = messages
                 brand_search_done = False  # guard: search_brand must not consume search iterations
                 ack_sent = False
@@ -266,6 +274,7 @@ class ProductAgent(Processor):
                             top = get_brand_by_id(results[0]["brand_id"])
                             if top:
                                 search_brand_name = top.get("brand_name", "")
+                                search_brand_id_from_tool = top.get("brand_id", "")
                             # All chunks from Chroma including embedded search_text
                             all_chunks = [
                                 {
@@ -337,6 +346,14 @@ class ProductAgent(Processor):
                         }
                     ]
 
+                # Persist requested brand across turns so subsequent brand-agnostic messages
+                # (e.g. "I want a sofa") keep searching within the brand the user established.
+                if search_brand_name and (search_brand_id_from_tool or search_brand_id):
+                    user_profile["requested_brand"] = {
+                        "brand_id": search_brand_id_from_tool or search_brand_id,
+                        "brand_name": search_brand_name,
+                    }
+
                 if tool_call or products:
                     # Enrich with brand_name
                     unique_brand_ids = list({p["brand_id"] for p in products if p.get("brand_id")})
@@ -367,6 +384,7 @@ class ProductAgent(Processor):
                         {"role": "system", "content": f"Username: {username}"},
                         {"role": "system", "content": f"Customer's scanned brand: {scanned_brand_name}"},
                         {"role": "system", "content": f"Category searched for: {search_category}" if search_category else ""},
+                        {"role": "system", "content": f"User explicitly requested brand: {search_brand_name}" if search_brand_name else ""},
                         {"role": "system", "content": (
                             f"Brand requested in this search: {effective_search_brand_name} (brand_id: {search_brand_id}). "
                             f"Only show a product whose brand_id matches '{search_brand_id}' exactly. "
