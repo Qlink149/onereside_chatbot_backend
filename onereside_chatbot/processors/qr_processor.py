@@ -59,6 +59,7 @@ class QRProcessor(Processor):
                 if current_brand:
                     user_profile["past_brand"] = user_profile.get("current_brand", "")
                     user_profile["current_brand"] = current_brand.get("brand_id")
+                    user_profile["requested_brand"] = None  # QR scan resets any mid-chat brand request
 
                     data["brand"] = current_brand
                     data[

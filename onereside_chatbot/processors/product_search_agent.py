@@ -192,7 +192,7 @@ class ProductAgent(Processor):
                         f"When the user's message doesn't mention a specific brand, search within this brand first. "
                         f"Fall back cross-brand only if this brand returns no results. "
                         f"Override only when the user explicitly names a different brand or asks for cross-brand options."
-                    ) if requested_brand and not brand else ""},
+                    ) if requested_brand else ""},
                     *build_history_turns(chat_history),
                     {"role": "user", "content": [{"type": "input_text", "text": user_query}]},
                 ]
@@ -206,10 +206,9 @@ class ProductAgent(Processor):
                 is_comparison = False
                 tool_call = None
                 text_message = None
-                search_category = ""
-                search_brand_id = ""
-                search_brand_name = ""  # human-readable name for the brand actually searched
-                search_brand_id_from_tool = ""  # brand_id discovered via search_brand tool call
+                category = ""
+                brand_id = ""
+                brand_name = ""
                 current_messages = messages
                 brand_search_done = False  # guard: search_brand must not consume search iterations
                 ack_sent = False
@@ -256,8 +255,8 @@ class ProductAgent(Processor):
                     args = json.loads(tool_call.arguments)
                     is_new_topic = args.get("is_new_topic", False)
                     if tool_call.name == "search_products":
-                        search_category = args.get("category", "")
-                        search_brand_id = args.get("brand_id", "")
+                        category = args.get("category", "")
+                        brand_id = args.get("brand_id", "")
 
                     logger.info("Tool invoked", extra={"tool": tool_call.name, "arguments": args, "iteration": iteration + 1})
 
@@ -273,8 +272,8 @@ class ProductAgent(Processor):
                             # Full doc for top match (includes description)
                             top = get_brand_by_id(results[0]["brand_id"])
                             if top:
-                                search_brand_name = top.get("brand_name", "")
-                                search_brand_id_from_tool = top.get("brand_id", "")
+                                brand_name = top.get("brand_name", "")
+                                brand_id = top.get("brand_id", "")
                             # All chunks from Chroma including embedded search_text
                             all_chunks = [
                                 {
@@ -346,13 +345,8 @@ class ProductAgent(Processor):
                         }
                     ]
 
-                # Persist requested brand across turns so subsequent brand-agnostic messages
-                # (e.g. "I want a sofa") keep searching within the brand the user established.
-                if search_brand_name and (search_brand_id_from_tool or search_brand_id):
-                    user_profile["requested_brand"] = {
-                        "brand_id": search_brand_id_from_tool or search_brand_id,
-                        "brand_name": search_brand_name,
-                    }
+                if brand_name and brand_id:
+                    user_profile["requested_brand"] = {"brand_id": brand_id, "brand_name": brand_name}
 
                 if tool_call or products:
                     # Enrich with brand_name
@@ -374,37 +368,28 @@ class ProductAgent(Processor):
                     )
 
                     # Presenter call — trimmed docs only
-                    scanned_brand_name = brand.get("brand_name", "") if brand else "None"
-                    # Resolve the human-readable name for the brand that was actually searched.
-                    # search_brand_name is set when recommender called search_brand tool.
-                    # Fall back to a persisted requested brand, then the scanned brand, then DB lookup.
-                    requested_brand_name = (
-                        requested_brand.get("brand_name", "")
-                        if requested_brand and search_brand_id == requested_brand.get("brand_id", "")
-                        else ""
-                    )
-                    scanned_search_brand_name = (
-                        scanned_brand_name
-                        if search_brand_id and brand and search_brand_id == brand.get("brand_id", "")
-                        else ""
-                    )
-                    lookup_brand_name = ""
-                    if search_brand_id and not (search_brand_name or requested_brand_name or scanned_search_brand_name):
-                        lookup_brand = get_brand_by_id(search_brand_id)
-                        lookup_brand_name = lookup_brand.get("brand_name", "") if lookup_brand else ""
-                    effective_search_brand_name = search_brand_name or requested_brand_name or scanned_search_brand_name or lookup_brand_name
+                    qr_brand_name = brand.get("brand_name", "") if brand else ""
+                    # Resolve brand_name if search_brand tool wasn't called (priority: requested > QR > DB)
+                    if not brand_name:
+                        if requested_brand and brand_id == requested_brand.get("brand_id", ""):
+                            brand_name = requested_brand.get("brand_name", "")
+                        elif brand and brand_id == brand.get("brand_id", ""):
+                            brand_name = qr_brand_name
+                        elif brand_id:
+                            lookup = get_brand_by_id(brand_id)
+                            brand_name = lookup.get("brand_name", "") if lookup else ""
 
                     presenter_messages = [
                         {"role": "system", "content": f"Username: {username}"},
-                        {"role": "system", "content": f"Customer's scanned brand: {scanned_brand_name}"},
-                        {"role": "system", "content": f"Category searched for: {search_category}" if search_category else ""},
-                        {"role": "system", "content": f"User explicitly requested brand: {search_brand_name}" if search_brand_name else ""},
+                        {"role": "system", "content": f"Customer's scanned brand: {qr_brand_name}"},
+                        {"role": "system", "content": f"Category searched for: {category}" if category else ""},
+                        {"role": "system", "content": f"User explicitly requested brand: {brand_name}" if brand_name else ""},
                         {"role": "system", "content": (
-                            f"Brand requested in this search: {effective_search_brand_name} (brand_id: {search_brand_id}). "
-                            f"Only show a product whose brand_id matches '{search_brand_id}' exactly. "
+                            f"Brand requested in this search: {brand_name} (brand_id: {brand_id}). "
+                            f"Only show a product whose brand_id matches '{brand_id}' exactly. "
                             f"If none of the search results match — do not show any product. "
-                            f"In any denial message, refer to this brand as '{effective_search_brand_name}', NOT the scanned brand."
-                        ) if search_brand_id else ""},
+                            f"In any denial message, refer to this brand as '{brand_name}', NOT the scanned brand."
+                        ) if brand_id else ""},
                         {"role": "system", "content": f"Search results: {json.dumps(_trim_for_presenter(products))}"},
                         {"role": "system", "content": f"Last Shown Product: {user_profile.get('last_shown_product', '')}"},
                         {"role": "system", "content": shown_summary},
