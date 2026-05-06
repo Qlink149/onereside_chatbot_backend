@@ -377,8 +377,22 @@ class ProductAgent(Processor):
                     scanned_brand_name = brand.get("brand_name", "") if brand else "None"
                     # Resolve the human-readable name for the brand that was actually searched.
                     # search_brand_name is set when recommender called search_brand tool.
-                    # Fallback: if the search used the scanned brand's id, use scanned brand name.
-                    effective_search_brand_name = search_brand_name or (scanned_brand_name if search_brand_id and brand and search_brand_id == brand.get("brand_id", "") else "")
+                    # Fall back to a persisted requested brand, then the scanned brand, then DB lookup.
+                    requested_brand_name = (
+                        requested_brand.get("brand_name", "")
+                        if requested_brand and search_brand_id == requested_brand.get("brand_id", "")
+                        else ""
+                    )
+                    scanned_search_brand_name = (
+                        scanned_brand_name
+                        if search_brand_id and brand and search_brand_id == brand.get("brand_id", "")
+                        else ""
+                    )
+                    lookup_brand_name = ""
+                    if search_brand_id and not (search_brand_name or requested_brand_name or scanned_search_brand_name):
+                        lookup_brand = get_brand_by_id(search_brand_id)
+                        lookup_brand_name = lookup_brand.get("brand_name", "") if lookup_brand else ""
+                    effective_search_brand_name = search_brand_name or requested_brand_name or scanned_search_brand_name or lookup_brand_name
 
                     presenter_messages = [
                         {"role": "system", "content": f"Username: {username}"},
