@@ -393,7 +393,7 @@ class ProductAgent(Processor):
                             f"If none of the search results match — do not show any product. "
                         ) if brand_id else ""},
                         {"role": "system", "content": f"Search results: {json.dumps(_trim_for_presenter(products))}"},
-                        {"role": "system", "content": f"Last Shown Product: {user_profile.get('last_shown_product', '')}"},
+                        {"role": "system", "content": f"Important: Last Shown Product: {user_profile.get('last_shown_product', '')}"},
                         {"role": "system", "content": shown_summary},
                         {"role": "system", "content": f"Is new topic: {is_new_topic}. {'Treat this as a fresh first recommendation — ignore prior rejections in chat history.' if is_new_topic else ''}"},
                         {"role": "system", "content": f"Is re-show: {is_reshow}. {'The customer asked to see this product again — show it as requested, acknowledge it naturally.' if is_reshow else ''}"},
@@ -486,6 +486,7 @@ class ProductAgent(Processor):
                             if scanned_brand_id and product.get("brand_id") != scanned_brand_id:
                                 user_profile["past_brand"] = scanned_brand_id
                                 user_profile["current_brand"] = ""
+                                user_profile["requested_brand"] = None
 
                             product_category = (product.get("category") or "").lower()
                             pending = user_profile.get("pending_needs", [])
