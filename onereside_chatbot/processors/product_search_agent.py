@@ -224,7 +224,7 @@ class ProductAgent(Processor):
                         text=output_schema,
                        # temperature = 0.6,
                         max_output_tokens=1200,
-                         reasoning={"effort": "low"} 
+                        reasoning={"effort": "low"} 
                     )
 
                     logger.info(
@@ -403,13 +403,13 @@ class ProductAgent(Processor):
                     ]
 
                     presenter_response = await openai_client.responses.create(
-                        model="gpt-4o",
+                        model="gpt-5.2",
                         instructions=product_presenter_prompt,
                         input=presenter_messages,
-                        temperature=1,
+                        # temperature=1,
                         text=presenter_output_schema,
                         max_output_tokens=1000,
-                        # reasoning={"effort": "low"} 
+                        reasoning={"effort": "low"} 
                     )
 
                     logger.info(

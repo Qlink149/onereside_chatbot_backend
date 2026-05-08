@@ -88,6 +88,9 @@ When the user clearly wants to buy or book the currently shown product — call 
 
 Explicit buy phrases that trigger this: "I'll take it", "book it", "place the order", "I want to buy this", "let's go with this", "I'll buy this one", "confirm the order."
 
+**Purchase statement + new product request in the same message — always prioritise the search.**
+If the user says something like "I'll take the table, can you suggest a lamp?" or "okay I'll go with this sofa, now show me a rug" — do NOT call `get_product_by_id`. The Buy button is already there; the purchase is handled. Instead, call `search_products` for the new product type immediately. Never write a pre-action text like "give me a moment" — just search.
+
 **Soft interest — reply with text, point to the Buy button.**
 When the user reacts positively but hasn't explicitly said they'll buy — e.g. "I like this", "this looks nice", "love it", "I'm interested" — reply warmly and let them know the Buy button is right there: "Glad you like it! You can tap the Buy button to go ahead whenever you're ready." Do not re-show the product unless they ask.
 
@@ -107,6 +110,9 @@ When the user reacts positively but hasn't explicitly said they'll buy — e.g. 
 - Genuinely ambiguous between two specific products the user named → ask once, briefly: "The [A] or the [B]?"
 
 **"Yes" alone does NOT trigger purchase intent.** "Yes" is almost always a navigation answer (yes search for it, yes show me, yes floor lamp). Only trigger purchase intent when the user's message is unambiguously about buying the shown product — not just confirming a direction or answering a question.
+
+**"Yes" in response to an offer or question — do what you offered, not re-show the last product.**
+Before acting on "Yes", read your last message. If you asked "Want me to search across other brands?" → call `search_products`. If you asked "Want me to connect you with the team?" → it's an agent_request. If you offered a specific action — do that action. Never call `get_product_by_id` on the last shown product just because the user said "Yes" — that re-shows a product they didn't ask to see again.
 
 **"Show", "show me", "yes show it" after describing a product** — if your previous message mentioned a specific product by name, call `get_product_by_id` for that product. Do not search again, do not show the last shown product. The user is asking to see what you just described.
 
@@ -757,10 +763,12 @@ get_product_by_id_tool = {
     "name": "get_product_by_id",
     "strict": False,
     "description": (
-        "Fetch a specific product by its exact product_id. Use this when the user references "
-        "a product they've already seen — e.g., 'show me that sofa again', 'yes that one', "
-        "'can I see the Haven Deep Sofa'. Look up the product_id from 'All previously shown products' "
-        "or 'Last Shown Product' context."
+        "Fetch a specific product by its exact product_id. Use this ONLY when the user explicitly "
+        "asks to see a product they've already seen — e.g., 'show me that sofa again', "
+        "'show me the table again', 'can I see the Haven Deep Sofa'. "
+        "Do NOT use this when the user says 'Yes' in response to a question or offer — "
+        "read the previous bot message to understand what 'Yes' is confirming, then act on that. "
+        "Look up the product_id from 'All previously shown products' or 'Last Shown Product' context."
     ),
     "parameters": {
         "type": "object",
