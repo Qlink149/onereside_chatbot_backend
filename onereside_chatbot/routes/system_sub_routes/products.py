@@ -154,7 +154,7 @@ async def bulk_upload_products(
         match = re.search(r"\d+", str(value))
         return int(match.group()) if match else None
 
-    df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
+    df.columns = [str(c).strip().lower().replace(" ", "_") for c in df.columns]
 
     results = {"created": [], "failed": []}
 
