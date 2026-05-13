@@ -1,3 +1,4 @@
+import re
 import uuid
 
 from pymongo import ReturnDocument
@@ -18,8 +19,9 @@ def _extract_r2_key(url: str) -> str | None:
 
 
 def _generate_product_id(brand_id: str, category: str) -> str:
-    brand_code = brand_id[:3].upper()
-    category_code = "".join(w[0] for w in category.split())[:3].upper()
+    brand_code = re.sub(r"[^A-Za-z0-9]", "", brand_id).upper()[:3]
+    category_initials = "".join(w[0] for w in category.split() if w)
+    category_code = re.sub(r"[^A-Za-z0-9]", "", category_initials).upper()[:3]
     while True:
         suffix = uuid.uuid4().hex[:6].upper()
         product_id = f"{brand_code}-{category_code}-{suffix}"
