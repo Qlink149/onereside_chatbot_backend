@@ -3,8 +3,17 @@ import re
 from pymongo import ReturnDocument
 
 from onereside_chatbot.database.chroma.utils import add_brand, update_brand_embedding, delete_brand
-from onereside_chatbot.database.collections import company
+from onereside_chatbot.database.collections import company, product as product_col
 from onereside_chatbot.utils.logger_config import logger
+
+
+def _fetch_listing_types_for_brands(brand_ids: list) -> dict:
+    """Returns {brand_id: [listing_types]} for the given brand_ids in one aggregation."""
+    pipeline = [
+        {"$match": {"brand_id": {"$in": brand_ids}, "listing_type": {"$nin": [None, ""]}}},
+        {"$group": {"_id": "$brand_id", "listing_types": {"$addToSet": "$listing_type"}}},
+    ]
+    return {doc["_id"]: sorted(doc["listing_types"]) for doc in product_col.aggregate(pipeline)}
 
 
 def _generate_brand_id(brand_name: str) -> str:
@@ -40,6 +49,9 @@ def get_brand_by_id(brand_id: str):
         if not brand:
             logger.exception("No brand found for given id.", extra={"brand_id": brand_id})
             return False
+        brand["listing_types"] = sorted([
+            lt for lt in product_col.distinct("listing_type", {"brand_id": brand_id}) if lt
+        ])
         return brand
     except Exception as e:
         logger.exception("Exception occurred while fetching brand.", extra={"brand_id": brand_id})
@@ -63,6 +75,10 @@ def get_all_brands(skip: int = 0, limit: int = 20) -> tuple[int, list]:
         brands = list(company.find({}, projection).skip(skip).limit(limit))
         for b in brands:
             b["_id"] = str(b["_id"])
+        brand_ids = [b["brand_id"] for b in brands if b.get("brand_id")]
+        listing_types_map = _fetch_listing_types_for_brands(brand_ids)
+        for b in brands:
+            b["listing_types"] = listing_types_map.get(b.get("brand_id"), [])
         logger.info("Fetched brands", extra={"skip": skip, "limit": limit, "total": total})
         return total, brands
     except Exception as e:

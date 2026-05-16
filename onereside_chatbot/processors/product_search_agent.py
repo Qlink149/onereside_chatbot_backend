@@ -302,6 +302,8 @@ class ProductAgent(Processor):
                                     "brand_description": top.get("brand_description"),
                                     "categories_offered": top.get("categories_offered", []),
                                     "product_types": top.get("product_types", []),
+                                    "listing_types": top.get("listing_types", []),
+                                    "brand_additional_context": top.get("brand_additional_context", ""),
                                 },
                                 "all_chunks": all_chunks,
                             } if top else {"found": False}

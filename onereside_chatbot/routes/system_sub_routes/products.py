@@ -22,7 +22,6 @@ class ProductCreate(BaseModel):
     brand_id: str
     name: str
     category: str
-    type: str
     listing_type: LISTING_TYPES = "product"
     description: str
     style_tags: list[str] | None = None
@@ -40,7 +39,6 @@ class ProductCreate(BaseModel):
 class ProductUpdate(BaseModel):
     name: str | None = None
     category: str | None = None
-    type: str | None = None
     listing_type: LISTING_TYPES | None = None
     description: str | None = None
     style_tags: list[str] | None = None
@@ -72,13 +70,12 @@ def list_products(
     limit: int = Query(20, ge=1, le=100),
     brand_id: str | None = Query(None),
     category: str | None = Query(None),
-    type: str | None = Query(None),
     listing_type: str | None = Query(None),
     _: str = Depends(verify_api_key),
 ):
     """List all products with optional filters and pagination."""
     skip = (page - 1) * limit
-    total, products = get_all_products(skip=skip, limit=limit, brand_id=brand_id, category=category, type=type, listing_type=listing_type)
+    total, products = get_all_products(skip=skip, limit=limit, brand_id=brand_id, category=category, listing_type=listing_type)
     return {"total": total, "page": page, "limit": limit, "data": products}
 
 
@@ -173,7 +170,6 @@ async def bulk_upload_products(
                 "brand_id": brand_id,
                 "name": str(row.get("name", "")).strip(),
                 "category": str(row.get("category", "")).strip(),
-                "type": str(row.get("type", "")).strip(),
                 "listing_type": raw_listing_type,
                 "description": str(row.get("description", "")).strip(),
                 "size": str(row.get("size", "")).strip() or None,
@@ -188,8 +184,8 @@ async def bulk_upload_products(
                 "media_url": [],
             }
 
-            if not data["name"] or not data["category"] or not data["type"]:
-                raise ValueError("name, category, and type are required")
+            if not data["name"] or not data["category"]:
+                raise ValueError("name and category are required")
 
             product = create_product(data)
             results["created"].append({"row": row_num, "product_id": product["product_id"], "name": product["name"]})

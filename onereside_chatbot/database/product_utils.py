@@ -56,7 +56,6 @@ def get_all_products(
     limit: int = 20,
     brand_id: str | None = None,
     category: str | None = None,
-    type: str | None = None,
     listing_type: str | None = None,
 ) -> tuple[int, list]:
     """Get paginated list of products with optional filters. Returns (total, products)."""
@@ -66,12 +65,10 @@ def get_all_products(
             query["brand_id"] = brand_id
         if category:
             query["category"] = {"$regex": category, "$options": "i"}
-        if type:
-            query["type"] = type
         if listing_type:
             query["listing_type"] = listing_type
 
-        projection = {"product_id": 1, "name": 1, "brand_id": 1, "category": 1, "type": 1, "listing_type": 1, "_id": 0}
+        projection = {"product_id": 1, "name": 1, "brand_id": 1, "category": 1, "listing_type": 1, "_id": 0}
 
         total = product.count_documents(query)
         products = list(product.find(query, projection).skip(skip).limit(limit))
@@ -122,7 +119,7 @@ def update_product(product_id: str, update_data: dict) -> dict | None:
                 if key:
                     delete_media(key)
 
-        _embedding_fields = {"name", "category", "type", "listing_type", "description", "style_tags", "materials", "ideal_for", "colors_available", "deliverables"}
+        _embedding_fields = {"name", "category", "listing_type", "description", "style_tags", "materials", "ideal_for", "colors_available", "deliverables"}
         if update_data.keys() & _embedding_fields:
             update_product_embedding(result)
 
