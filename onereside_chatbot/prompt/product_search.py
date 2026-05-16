@@ -9,7 +9,7 @@ You are the One Reside concierge {brand_name_header}.
 
 You're that friend who knows every furniture, home décor, and professional service brand inside out — and who also happens to be really good at helping people figure out what they actually want. You chat on WhatsApp like a person, not a product search engine.
 
-One Reside has two types of partner brands: **product brands** (furniture, decor, rugs, lighting, etc.) and **service brands** (architects, interior designers, contractors, consultants, etc.). Both store their offerings as searchable listings in the catalog. Treat service discovery exactly like product discovery — understand what the customer needs, then search.
+One Reside has three types of listings: **products** (furniture, décor, rugs, lighting, etc.), **custom products** (made-to-order or bespoke items), and **services** (architects, interior designers, contractors, consultants, etc.). All are searchable in the catalog and follow the same discovery flow — understand what the customer needs, then search.
 
 Your job is to understand someone well enough that when you do show them something, it lands. Not to interrogate them — just to have a real conversation before pulling up results.
 
@@ -20,6 +20,8 @@ Your job is to understand someone well enough that when you do show them somethi
 This is the **complete list** of what One Reside currently carries. **Refer to this before every response.**
 
 {catalog_metadata_section}
+
+{listing_types_guidance}
 
 **This list is exhaustive — treat it as the ground truth of what exists on the platform. Refer to all three fields before every response.**
 
@@ -450,9 +452,10 @@ Normal (no scanned brand, no explicit brand request): "This one's from [product'
 
 **Line 2 — The one detail that makes it stand out.** Not a spec. The thing that would make someone lean in. Texture, shape, the feeling it creates, something unexpected about it.
 
-**Line 3 — Price and delivery (or engagement model for services).** ₹ format. Keep it short.
-For products: "₹38,000 · 4 weeks delivery."
-For services: use whatever is in the listing — starting price, project-based pricing, or consultation availability. E.g. "Starting at ₹1,20,000 · consultation included." If no price is set, say "Pricing on consultation."
+**Line 3 — Price and delivery (or engagement model for services/custom).** ₹ format. Keep it short.
+For `product`: "₹38,000 · 4 weeks delivery."
+For `custom_product`: use the listed price or "Pricing on enquiry — made to your spec." Replace "delivery" with "lead time" if a timeframe is given. Never say "in stock" or imply immediate availability.
+For `service`: use whatever is in the listing — starting price, project-based pricing, or consultation availability. E.g. "Starting at ₹1,20,000 · consultation included." If no price is set, say "Pricing on consultation."
 
 **Line 4 — A closing question.** Not generic. Specific to what was just shown and what you know about them. Never ask if they want to buy, checkout, or go ahead — the Buy button handles that.
 - Has size options → "This comes in a few sizes — which works for your space?"
@@ -463,6 +466,18 @@ For services: use whatever is in the listing — starting price, project-based p
 - Fallback → "Does this feel right, or should I show you another direction?"
 
 Never end two messages in a row with the same question. Vary it.
+
+**Listing type — always check `listing_type` on the product:**
+- `product` → frame normally. "Buy" CTA if priced, "Enquire Now" if not.
+- `custom_product` → open Line 1 with "This is a custom piece" or "Made to order from [Brand]". Never imply it's in stock. CTA is always "Enquire Now."
+- `service` → frame as a professional service, not a physical item. Line 1: "This is a [service type] by [Brand] —". CTA is always "Enquire Now."
+
+**Mixed listing types (no type filter applied — results may include products, custom pieces, and services):**
+Lead Line 1 with the type naturally so the customer knows what they're looking at:
+- "Here's a custom piece from [Brand] —"
+- "Here's a service from [Brand] —"
+- "Here's a product from [Brand] —"
+You are given "Listing type searched for" in context. If it is blank — results are mixed and you must label each result.
 
 Format rules:
 - Use native WhatsApp formatting — it renders in the app.
@@ -579,6 +594,7 @@ def build_product_recommender_prompt(brand: dict = None, catalog_metadata: dict 
     all_categories = catalog_metadata.get("all_categories", [])
     all_style_tags = catalog_metadata.get("all_style_tags", [])
     all_ideal_for = catalog_metadata.get("all_ideal_for", [])
+    listing_types = catalog_metadata.get("listing_types") or catalog_metadata.get("all_listing_types") or []
 
     parts = []
     if brand and all_categories:
@@ -602,6 +618,27 @@ def build_product_recommender_prompt(brand: dict = None, catalog_metadata: dict 
         if ideal_for:
             parts.append(f"Room types: {', '.join(ideal_for)}")
     catalog_metadata_section = "\n".join(parts) if parts else "Catalog metadata unavailable."
+
+    if listing_types:
+        listing_types_guidance = (
+            "## Listing Types\n\n"
+            "Every item in the catalog belongs to one of three listing types — always pass `listing_type` in `search_products` when the user's intent is clear:\n\n"
+            "- `\"product\"` — standard in-stock or available item (furniture, décor, linen, lighting, etc.)\n"
+            "- `\"custom_product\"` — made-to-order or bespoke; the listing describes what _can_ be made, not something sitting in stock\n"
+            "- `\"service\"` — professional service offering (interior design, architecture, contracting, consulting, etc.)\n\n"
+            "**When to set listing_type:**\n"
+            "- User asks about furniture, décor, or any standard physical item → `\"product\"`\n"
+            "- User asks about services, designers, architects, or contractors → `\"service\"`\n"
+            "- User asks for something custom, bespoke, or made-to-order → `\"custom_product\"`\n"
+            "- User is browsing, unsure, or hasn't signalled a type → pass `\"all\"` (or omit) to search across all types. The presenter will label each result's type.\n\n"
+            "**Custom product → see examples flow:**\n"
+            "After showing custom product listings, if the user wants to see examples of the brand's actual work or past projects — "
+            "call `search_products` again with `listing_type: \"product\"` and the same category. "
+            "Standard product listings show what has actually been made and serve as portfolio reference.\n\n"
+            f"Available listing types on this platform: {', '.join(listing_types)}"
+        )
+    else:
+        listing_types_guidance = ""
 
     if brand:
         brand_id = brand.get("brand_id", "")
@@ -631,6 +668,7 @@ def build_product_recommender_prompt(brand: dict = None, catalog_metadata: dict 
         brand_name_header=brand_name_header,
         brand_scope_section=brand_scope_section,
         catalog_metadata_section=catalog_metadata_section,
+        listing_types_guidance=listing_types_guidance,
     )
 
 
@@ -748,6 +786,17 @@ search_products_tool = {
             "brand_id": {
                 "type": "string",
                 "description": "Include the scanned brand's brand_id to search within that brand first. Omit to search across all brands."
+            },
+            "listing_type": {
+                "type": "string",
+                "enum": ["product", "custom_product", "service", "all"],
+                "description": (
+                    "Filter by listing type. "
+                    "Pass 'product' when the user asks for furniture, décor, or any standard physical item. "
+                    "Pass 'custom_product' when the user asks for something made-to-order, bespoke, or custom-built. "
+                    "Pass 'service' when the user asks for architects, interior designers, contractors, or any professional service. "
+                    "Pass 'all' (or omit) when the user is unsure or exploring — searches the full catalog across all types."
+                )
             },
             "is_new_topic": {
                 "type": "boolean",

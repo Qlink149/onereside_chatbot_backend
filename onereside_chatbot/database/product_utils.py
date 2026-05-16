@@ -57,6 +57,7 @@ def get_all_products(
     brand_id: str | None = None,
     category: str | None = None,
     type: str | None = None,
+    listing_type: str | None = None,
 ) -> tuple[int, list]:
     """Get paginated list of products with optional filters. Returns (total, products)."""
     try:
@@ -67,8 +68,10 @@ def get_all_products(
             query["category"] = {"$regex": category, "$options": "i"}
         if type:
             query["type"] = type
+        if listing_type:
+            query["listing_type"] = listing_type
 
-        projection = {"product_id": 1, "name": 1, "brand_id": 1, "category": 1, "type": 1, "_id": 0}
+        projection = {"product_id": 1, "name": 1, "brand_id": 1, "category": 1, "type": 1, "listing_type": 1, "_id": 0}
 
         total = product.count_documents(query)
         products = list(product.find(query, projection).skip(skip).limit(limit))
@@ -119,7 +122,7 @@ def update_product(product_id: str, update_data: dict) -> dict | None:
                 if key:
                     delete_media(key)
 
-        _embedding_fields = {"name", "category", "type", "description", "style_tags", "materials", "ideal_for", "colors_available", "deliverables"}
+        _embedding_fields = {"name", "category", "type", "listing_type", "description", "style_tags", "materials", "ideal_for", "colors_available", "deliverables"}
         if update_data.keys() & _embedding_fields:
             update_product_embedding(result)
 
@@ -181,25 +184,30 @@ def get_catalog_metadata(brand_id: str = None) -> dict:
         all_categories = [c for c in product.distinct("category") if c]
         all_style_tags = [s for s in product.distinct("style_tags") if s]
         all_ideal_for = [i for i in product.distinct("ideal_for") if i]
+        all_listing_types = [lt for lt in product.distinct("listing_type") if lt]
 
         if brand_id:
             brand_filter = {"brand_id": brand_id}
             brand_categories = [c for c in product.distinct("category", brand_filter) if c]
             brand_style_tags = [s for s in product.distinct("style_tags", brand_filter) if s]
             brand_ideal_for = [i for i in product.distinct("ideal_for", brand_filter) if i]
+            brand_listing_types = [lt for lt in product.distinct("listing_type", brand_filter) if lt]
             return {
                 "categories": brand_categories,
                 "style_tags": brand_style_tags,
                 "ideal_for": brand_ideal_for,
+                "listing_types": brand_listing_types,
                 "all_categories": all_categories,
                 "all_style_tags": all_style_tags,
                 "all_ideal_for": all_ideal_for,
+                "all_listing_types": all_listing_types,
             }
 
         return {
             "categories": all_categories,
             "style_tags": all_style_tags,
             "ideal_for": all_ideal_for,
+            "listing_types": all_listing_types,
         }
     except Exception as e:
         logger.exception("Failed to fetch catalog metadata.")
