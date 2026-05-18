@@ -122,6 +122,7 @@ async def upload_product_media(
 @router.post("/bulk-upload", status_code=201)
 async def bulk_upload_products(
     brand_id: str = Query(...),
+    listing_type: LISTING_TYPES | None = Query(None),
     file: UploadFile = File(...),
     _: str = Depends(verify_api_key),
 ):
@@ -162,9 +163,12 @@ async def bulk_upload_products(
     for idx, row in df.iterrows():
         row_num = int(idx) + 2  # 1-based + header row
         try:
-            raw_listing_type = str(row.get("listing_type", "product")).strip().lower()
-            if raw_listing_type not in ("product", "custom_product", "service"):
-                raw_listing_type = "product"
+            if listing_type:
+                raw_listing_type = listing_type
+            else:
+                raw_listing_type = str(row.get("listing_type", "product")).strip().lower()
+                if raw_listing_type not in ("product", "custom_product", "service"):
+                    raw_listing_type = "product"
 
             data = {
                 "brand_id": brand_id,
