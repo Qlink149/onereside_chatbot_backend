@@ -459,8 +459,8 @@ Normal (no scanned brand, no explicit brand request): "This one's from [product'
 **Line 2 — The one detail that makes it stand out.** Not a spec. The thing that would make someone lean in. Texture, shape, the feeling it creates, something unexpected about it.
 
 **Line 3 — Price and delivery (or engagement model for services/custom).** ₹ format. Keep it short.
-For `product`: "₹38,000 · 4 weeks delivery."
-For `custom_product`: use the listed price or "Pricing on enquiry — made to your spec." Replace "delivery" with "lead time" if a timeframe is given. Never say "in stock" or imply immediate availability.
+For `ready_product`: "₹38,000 · 4 weeks delivery."
+For `made_to_order`: use the listed price or "Pricing on enquiry — built to your spec." Replace "delivery" with "lead time" if a timeframe is given. Never say "in stock" or imply immediate availability.
 For `service`: use whatever is in the listing — starting price, project-based pricing, or consultation availability. E.g. "Starting at ₹1,20,000 · consultation included." If no price is set, say "Pricing on consultation."
 
 **Line 4 — A closing question.** Not generic. Specific to what was just shown and what you know about them. Never ask if they want to buy, checkout, or go ahead — the Buy button handles that.
@@ -473,12 +473,12 @@ For `service`: use whatever is in the listing — starting price, project-based 
 
 Never end two messages in a row with the same question. Vary it.
 
-**Listing type — always label what you're showing. Check `listing_type` on the product and mention it naturally in Line 1 every time:**
-- `product` → "This is a product from [Brand] —" or weave it in: "Here's a [category] from [Brand] —"
-- `custom_product` → "This is a custom piece from [Brand] —" or "Made to order by [Brand] —". Never imply it's in stock. CTA is always "Enquire Now."
-- `service` → "This is a service by [Brand] —" or "Here's a [service type] offered by [Brand] —". CTA is always "Enquire Now."
+**Listing type and product type — always label what you're showing. Check both `listing_type` and `type` on the product and mention it naturally in Line 1 every time:**
+- `listing_type: "product"` + `type: "ready_product"` → "Here's a [category] from [Brand] —". Standard framing. "Buy" CTA if priced.
+- `listing_type: "product"` + `type: "made_to_order"` → "This is a made-to-order piece from [Brand] —" or "This can be built to your spec by [Brand] —". Never imply it's in stock. CTA is always "Enquire Now."
+- `listing_type: "service"` → "This is a service by [Brand] —" or "Here's a [service type] offered by [Brand] —". CTA is always "Enquire Now."
 
-Always make the type clear so the customer knows exactly what they're looking at — product, custom piece, or service. Never leave it ambiguous.
+Always make the type clear so the customer knows exactly what they're looking at — ready product, made-to-order, or service. Never leave it ambiguous.
 
 **Mixed listing types (no type filter applied — results may include products, custom pieces, and services):**
 You are given "Listing type searched for" in context. If it is blank — results are mixed. Label each result's type in Line 1 as above.
@@ -620,20 +620,26 @@ def build_product_recommender_prompt(brand: dict = None, catalog_metadata: dict 
 
     if listing_types:
         listing_types_guidance = (
-            "## Listing Types\n\n"
-            "Every item in the catalog belongs to one of three listing types — always pass `listing_type` in `search_products` when the user's intent is clear:\n\n"
-            "- `\"product\"` — standard in-stock or available item (furniture, décor, linen, lighting, etc.)\n"
-            "- `\"custom_product\"` — made-to-order or bespoke; the listing describes what _can_ be made, not something sitting in stock\n"
-            "- `\"service\"` — professional service offering (interior design, architecture, contracting, consulting, etc.)\n\n"
+            "## Listing Types & Product Types\n\n"
+            "Every item belongs to a **listing_type**. Products also have a **product_type** sub-field:\n\n"
+            "**listing_type:**\n"
+            "- `\"product\"` — a physical item (furniture, décor, linen, lighting, etc.). Can be ready or made-to-order.\n"
+            "- `\"service\"` — a professional service offering (interior design, architecture, contracting, consulting, etc.)\n\n"
+            "**product_type** (only on `listing_type: \"product\"`):\n"
+            "- `\"ready_product\"` — available off-the-shelf, standard sizes, can be purchased directly\n"
+            "- `\"made_to_order\"` — built to the customer's spec; size, material, or design can be customised\n\n"
             "**When to set listing_type:**\n"
-            "- User asks about furniture, décor, or any standard physical item → `\"product\"`\n"
+            "- User asks about furniture, décor, or any physical item → `\"product\"`\n"
             "- User asks about services, designers, architects, or contractors → `\"service\"`\n"
-            "- User asks for something custom, bespoke, or made-to-order → `\"custom_product\"`\n"
-            "- User is browsing, unsure, or hasn't signalled a type → pass `\"all\"` (or omit) to search across all types. The presenter will label each result's type.\n\n"
-            "**Custom product → see examples flow:**\n"
-            "After showing custom product listings, if the user wants to see examples of the brand's actual work or past projects — "
-            "call `search_products` again with `listing_type: \"product\"` and the same category. "
-            "Standard product listings show what has actually been made and serve as portfolio reference.\n\n"
+            "- User is unsure or browsing → pass `\"all\"` or omit — search everything\n\n"
+            "**When to set product_type:**\n"
+            "- User wants something custom-built, bespoke, or to their own spec → `listing_type: \"product\"`, `product_type: \"made_to_order\"`\n"
+            "- User wants something ready, off-the-shelf → `listing_type: \"product\"`, `product_type: \"ready_product\"`\n"
+            "- User hasn't expressed a preference → omit `product_type`\n\n"
+            "**Custom request flow — always follow this sequence:**\n"
+            "1. User wants something custom (specific size, material, personal spec) → search `listing_type: \"product\"`, `product_type: \"made_to_order\"`, same category\n"
+            "2. If user wants professional help to design or execute it → search `listing_type: \"service\"` in that brand or all brands\n"
+            "3. If nothing found at either step → offer the OneReside team immediately. No further questions.\n\n"
             f"Available listing types on this platform: {', '.join(listing_types)}"
         )
     else:
@@ -788,13 +794,22 @@ search_products_tool = {
             },
             "listing_type": {
                 "type": "string",
-                "enum": ["product", "custom_product", "service", "all"],
+                "enum": ["product", "service", "all"],
                 "description": (
                     "Filter by listing type. "
-                    "Pass 'product' when the user asks for furniture, décor, or any standard physical item. "
-                    "Pass 'custom_product' when the user asks for something made-to-order, bespoke, or custom-built. "
+                    "Pass 'product' when the user asks for furniture, décor, linen, or any physical item (ready or made-to-order). "
                     "Pass 'service' when the user asks for architects, interior designers, contractors, or any professional service. "
                     "Pass 'all' (or omit) when the user is unsure or exploring — searches the full catalog across all types."
+                )
+            },
+            "product_type": {
+                "type": "string",
+                "enum": ["ready_product", "made_to_order"],
+                "description": (
+                    "Filter products by sub-type within listing_type 'product'. "
+                    "Pass 'made_to_order' when the user wants something custom-built, bespoke, or to their own spec. "
+                    "Pass 'ready_product' when the user wants something available off-the-shelf. "
+                    "Omit when the user hasn't expressed a preference — search both."
                 )
             },
             "is_new_topic": {

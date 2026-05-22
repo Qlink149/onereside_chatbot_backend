@@ -25,7 +25,7 @@ import random
 # Fields sent to the presenter not full docs
 PRESENTER_FIELDS = {
     "product_id", "name", "price_inr", "brand_id", "brand_name", "category",
-    "listing_type", "style_tags", "ideal_for", "materials", "colors_available",
+    "listing_type", "type", "style_tags", "ideal_for", "materials", "colors_available",
     "description", "delivery_timeline",
 }
 
@@ -73,6 +73,7 @@ class ProductAgent(Processor):
             listing_type = args.get("listing_type") or None
             if listing_type == "all":
                 listing_type = None
+            product_type = args.get("product_type") or None
 
             # Wider pool when price/category filters will be applied post-search
             has_filters = price_min > 0 or (0 < price_max < 10_000_000) or category
@@ -91,6 +92,8 @@ class ProductAgent(Processor):
                     q["category"] = {"$regex": category, "$options": "i"}
                 if listing_type:
                     q["listing_type"] = listing_type
+                if product_type:
+                    q["type"] = product_type
                 if price_min > 0 or (0 < price_max < 10_000_000):
                     price_filter = {}
                     if price_min > 0:
@@ -114,6 +117,7 @@ class ProductAgent(Processor):
                 brand_ids=[brand_id] if brand_id else None,
                 n_results=n_results,
                 listing_type=listing_type,
+                product_type=product_type,
             )
             products = fetch_products(product_ids)
 
@@ -123,7 +127,7 @@ class ProductAgent(Processor):
                     "Brand search returned no results, falling back to all brands",
                     extra={"brand_id": brand_id, "query": query},
                 )
-                product_ids = semantic_search(query=query, brand_ids=None, n_results=n_results, listing_type=listing_type)
+                product_ids = semantic_search(query=query, brand_ids=None, n_results=n_results, listing_type=listing_type, product_type=product_type)
                 products = fetch_products(product_ids)
 
             logger.info(
@@ -216,6 +220,7 @@ class ProductAgent(Processor):
                 brand_id = ""
                 brand_name = ""
                 listing_type_searched = ""
+                product_type_searched = ""
                 current_messages = messages
                 brand_search_done = False  # guard: search_brand must not consume search iterations
                 ack_sent = False
@@ -266,6 +271,7 @@ class ProductAgent(Processor):
                         category = args.get("category", "")
                         brand_id = args.get("brand_id", "")
                         listing_type_searched = args.get("listing_type", "")
+                        product_type_searched = args.get("product_type", "")
 
                     logger.info("Tool invoked", extra={"tool": tool_call.name, "arguments": args, "iteration": iteration + 1})
 
@@ -397,6 +403,7 @@ class ProductAgent(Processor):
                         {"role": "system", "content": f"Customer's scanned brand: {qr_brand_name}"},
                         {"role": "system", "content": f"Category searched for: {category}" if category else ""},
                         {"role": "system", "content": f"Listing type searched for: {listing_type_searched}" if listing_type_searched else "Listing type: not filtered (mixed results possible — label each result's type)"},
+                        {"role": "system", "content": f"Product type searched for: {product_type_searched}" if product_type_searched else ""},
                         {"role": "system", "content": f"User explicitly requested brand: {brand_name}" if brand_name else ""},
                         {"role": "system", "content": (
                             f"Brand requested in this search: {brand_name} (brand_id: {brand_id}). "
@@ -516,7 +523,8 @@ class ProductAgent(Processor):
                             user_profile["resolved_needs"] = resolved
 
                             _listing_type = product.get("listing_type", "product")
-                            has_price = bool(product.get("price_inr")) and _listing_type == "product"
+                            _product_type = product.get("type", "ready_product")
+                            has_price = bool(product.get("price_inr")) and _listing_type == "product" and _product_type == "ready_product"
                             cta_title = "Buy" if has_price else "Enquire Now"
                             caption = "Tap to purchase this product." if has_price else "Tap to enquire about pricing and availability."
                             bot_response.append(

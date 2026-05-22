@@ -13,7 +13,8 @@ from onereside_chatbot.database.storage.r2_utils import upload_media
 from onereside_chatbot.routes.dependencies import verify_api_key
 
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp", "video/mp4"}
-LISTING_TYPES = Literal["product", "custom_product", "service"]
+LISTING_TYPES = Literal["product", "service"]
+PRODUCT_TYPES = Literal["ready_product", "made_to_order"]
 
 router = APIRouter(prefix="/products", tags=["products"])
 
@@ -23,6 +24,7 @@ class ProductCreate(BaseModel):
     name: str
     category: str
     listing_type: LISTING_TYPES = "product"
+    type: PRODUCT_TYPES = "ready_product"
     description: str
     style_tags: list[str] | None = None
     materials: list[str] | None = None
@@ -40,6 +42,7 @@ class ProductUpdate(BaseModel):
     name: str | None = None
     category: str | None = None
     listing_type: LISTING_TYPES | None = None
+    type: PRODUCT_TYPES | None = None
     description: str | None = None
     style_tags: list[str] | None = None
     materials: list[str] | None = None
@@ -71,11 +74,12 @@ def list_products(
     brand_id: str | None = Query(None),
     category: str | None = Query(None),
     listing_type: str | None = Query(None),
+    type: str | None = Query(None),
     _: str = Depends(verify_api_key),
 ):
     """List all products with optional filters and pagination."""
     skip = (page - 1) * limit
-    total, products = get_all_products(skip=skip, limit=limit, brand_id=brand_id, category=category, listing_type=listing_type)
+    total, products = get_all_products(skip=skip, limit=limit, brand_id=brand_id, category=category, listing_type=listing_type, type=type)
     return {"total": total, "page": page, "limit": limit, "data": products}
 
 
@@ -167,14 +171,19 @@ async def bulk_upload_products(
                 raw_listing_type = listing_type
             else:
                 raw_listing_type = str(row.get("listing_type", "product")).strip().lower()
-                if raw_listing_type not in ("product", "custom_product", "service"):
+                if raw_listing_type not in ("product", "service"):
                     raw_listing_type = "product"
+
+            raw_type = str(row.get("type", "ready_product")).strip().lower()
+            if raw_type not in ("ready_product", "made_to_order"):
+                raw_type = "ready_product"
 
             data = {
                 "brand_id": brand_id,
                 "name": str(row.get("name", "")).strip(),
                 "category": str(row.get("category", "")).strip(),
                 "listing_type": raw_listing_type,
+                "type": raw_type,
                 "description": str(row.get("description", "")).strip(),
                 "size": str(row.get("size", "")).strip() or None,
                 "style_tags": split_csv_field(row.get("style_tags")),

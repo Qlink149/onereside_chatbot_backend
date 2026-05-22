@@ -61,7 +61,7 @@ def add_product(product: dict):
         product_col.add(
             ids=[product_id],
             documents=[build_search_text(product)],
-            metadatas=[{"brand_id": brand_id, "category": category, "product_id": product_id, "listing_type": listing_type}]
+            metadatas=[{"brand_id": brand_id, "category": category, "product_id": product_id, "listing_type": listing_type, "type": product.get("type", "ready_product")}]
         )
         logger.info("Product added to vector DB.", extra={"product_id": product_id, "brand_id": brand_id})
     except Exception as e:
@@ -69,11 +69,12 @@ def add_product(product: dict):
         raise e
 
 
-def semantic_search(query: str, brand_ids: list = None, exclude_ids: list = None, n_results: int = 3, listing_type: str = None):
+def semantic_search(query: str, brand_ids: list = None, exclude_ids: list = None, n_results: int = 3, listing_type: str = None, product_type: str = None):
     """
     Search products by semantic similarity.
     Pass brand_ids to scope to specific brands; omit (or pass None) to search all brands.
-    Pass listing_type to filter by product/custom_product/service.
+    Pass listing_type to filter by product/service.
+    Pass product_type to filter by ready_product/made_to_order.
     Returns list of matching product IDs.
     """
     try:
@@ -83,6 +84,8 @@ def semantic_search(query: str, brand_ids: list = None, exclude_ids: list = None
             filters.append({"brand_id": {"$in": brand_ids}})
         if listing_type:
             filters.append({"listing_type": {"$eq": listing_type}})
+        if product_type:
+            filters.append({"type": {"$eq": product_type}})
         where_clause = {"$and": filters} if len(filters) > 1 else (filters[0] if filters else None)
         response = product_col.query(query_texts=[query], where=where_clause, n_results=n_results)
 
@@ -108,7 +111,7 @@ def update_product_embedding(product: dict):
         product_col.upsert(
             ids=[product_id],
             documents=[build_search_text(product)],
-            metadatas=[{"brand_id": product.get("brand_id", ""), "category": product.get("category", ""), "product_id": product_id, "listing_type": product.get("listing_type", "product")}]
+            metadatas=[{"brand_id": product.get("brand_id", ""), "category": product.get("category", ""), "product_id": product_id, "listing_type": product.get("listing_type", "product"), "type": product.get("type", "ready_product")}]
         )
         logger.info("Product embedding updated in vector DB.", extra={"product_id": product_id})
     except Exception as e:
