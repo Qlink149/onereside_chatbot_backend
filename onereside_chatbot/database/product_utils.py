@@ -85,6 +85,8 @@ def get_all_products(
 def create_product(data: dict) -> dict:
     """Insert a new product into MongoDB and add its description to Chroma."""
     try:
+        if not data.get("type"):
+            data["type"] = "ready_product" if data.get("listing_type") == "product" else None
         product_id = _generate_product_id(data["brand_id"], data["category"])
         data["product_id"] = product_id
 

@@ -24,7 +24,7 @@ class ProductCreate(BaseModel):
     name: str
     category: str
     listing_type: LISTING_TYPES = "product"
-    type: PRODUCT_TYPES = "ready_product"
+    type: PRODUCT_TYPES | None = None
     description: str
     style_tags: list[str] | None = None
     materials: list[str] | None = None
@@ -35,7 +35,7 @@ class ProductCreate(BaseModel):
     delivery_weeks: int | None = None
     ideal_for: list[str] | None = None
     deliverables: list[str] | None = None
-    inventory_status: str
+    inventory_status: str | None = None
 
 
 class ProductUpdate(BaseModel):
@@ -174,8 +174,12 @@ async def bulk_upload_products(
                 if raw_listing_type not in ("product", "service"):
                     raw_listing_type = "product"
 
-            raw_type = str(row.get("type", "ready_product")).strip().lower()
-            if raw_type not in ("ready_product", "made_to_order"):
+            raw_type_val = str(row.get("type", "")).strip().lower()
+            if raw_type_val in ("ready_product", "made_to_order"):
+                raw_type = raw_type_val
+            elif raw_listing_type == "service":
+                raw_type = "made_to_order"
+            else:
                 raw_type = "ready_product"
 
             data = {
