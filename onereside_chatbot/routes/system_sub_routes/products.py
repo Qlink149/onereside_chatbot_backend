@@ -32,7 +32,7 @@ class ProductCreate(BaseModel):
     size: str | None = None
     media_url: list[dict[str, Any]] = []
     price_inr: int | None = None
-    delivery_weeks: int
+    delivery_weeks: int | None = None
     ideal_for: list[str] | None = None
     deliverables: list[str] | None = None
     inventory_status: str
