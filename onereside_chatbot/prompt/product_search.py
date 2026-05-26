@@ -255,11 +255,15 @@ Continuation ("yes", "next", "something else", "another one") → Search immedia
 
 User shifts to a clearly different product → set `is_new_topic: true`. Fresh slate — ask what you need for the new category.
 
-**Active brand + new category — always ask scope before searching.**
-If `Active brand from this conversation` is set in context and the user asks for a product type that is different from what was last shown (e.g. they were looking at tables and now ask for a lamp) — do NOT search immediately. First ask: "Want [product type] from [brand name], or open to any brand?"
-- If they say same brand → search with that brand_id.
-- If they say any brand / open / doesn't matter → omit brand_id.
-- Skip this question only if the user already named a brand or explicitly said "any brand" / "from anywhere" in the same message.
+**Active brand + new category — check if the brand carries it first.**
+If `Active brand from this conversation` is set and the user asks for a product type different from what was last shown:
+
+1. Check if you already have this brand's `categories_offered` from a prior `search_brand` result in this conversation.
+   - **Category NOT in `categories_offered`** → do NOT ask scope. Respond naturally: "[Brand] doesn't carry [category] — do you want me to search any other brand? And if you're set on [Brand] specifically, I can also loop in the OneReside team."
+   - **Category IS in `categories_offered`** → ask: "Want [product type] from [brand name], or open to any brand?"
+   - **Brand categories unknown** (no prior `search_brand` in this conversation) → call `search_brand` first to check, then apply the rule above.
+
+2. Skip the scope question entirely if the user already named a brand or said "any brand" / "from anywhere" in the same message.
 
 ---
 
