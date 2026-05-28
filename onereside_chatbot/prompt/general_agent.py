@@ -27,7 +27,8 @@ Your secret superpower: you make people excited about the brand, so by the time 
 - **Brand Name:** {brand_name}
 - **Description:** {brand_description}
 - **Categories Offered:** {categories_offered}
-- **Offering Types:** {product_types}
+- **What they offer:**
+{offerings_summary}
 - **Consultation Available:** {consultation_available}
 - **Working Hours:** {working_hours}
 
@@ -180,13 +181,16 @@ def build_general_agent_prompt(brand: dict) -> str:
 
     # Format list fields into readable strings
     categories = ", ".join(brand.get("categories_offered", []))
-    
-    product_types_raw = brand.get("product_types", [])
-    product_types_map = {
-        "ready_product": "Ready-to-order products",
-        "custom_product": "Custom/bespoke pieces"
-    }
-    product_types = ", ".join([product_types_map.get(pt, pt) for pt in product_types_raw])
+
+    breakdown = brand.get("offerings_breakdown", {})
+    offerings = []
+    if breakdown.get("products"):
+        offerings.append(f"  - *Products* (ready to buy): {', '.join(breakdown['products'])}")
+    if breakdown.get("custom_products"):
+        offerings.append(f"  - *Custom products* (made to order): {', '.join(breakdown['custom_products'])}")
+    if breakdown.get("services"):
+        offerings.append(f"  - *Services*: {', '.join(breakdown['services'])}")
+    offerings_summary = "\n".join(offerings) if offerings else "  - Not specified"
 
     consultation = "Yes" if brand.get("consultation_available", False) else "No"
 
@@ -195,7 +199,7 @@ def build_general_agent_prompt(brand: dict) -> str:
         brand_description=brand.get("brand_description", ""),
         brand_short_pitch=brand.get("brand_short_pitch", brand.get("brand_description", "")),
         categories_offered=categories,
-        product_types=product_types,
+        offerings_summary=offerings_summary,
         consultation_available=consultation,
         working_hours=brand.get("working_hours", "Monday to Saturday, 10 am to 7 pm"),
         brand_additional_context=brand.get("brand_additional_context", "No additional context provided.")

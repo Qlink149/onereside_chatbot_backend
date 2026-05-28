@@ -80,6 +80,26 @@ def get_brand_by_id(brand_id: str):
         brand["listing_types"] = sorted([
             lt for lt in product_col.distinct("listing_type", {"brand_id": brand_id}) if lt
         ])
+        # Build per-type category breakdown for prompt injection
+        pipeline = [
+            {"$match": {"brand_id": brand_id, "category": {"$nin": [None, ""]}}},
+            {"$group": {
+                "_id": {"listing_type": "$listing_type", "type": "$type"},
+                "categories": {"$addToSet": "$category"}
+            }}
+        ]
+        breakdown = {"products": [], "custom_products": [], "services": []}
+        for doc in product_col.aggregate(pipeline):
+            lt = doc["_id"].get("listing_type", "")
+            pt = doc["_id"].get("type", "")
+            cats = sorted(doc["categories"])
+            if lt == "product" and pt == "ready_product":
+                breakdown["products"].extend(cats)
+            elif lt == "product" and pt == "made_to_order":
+                breakdown["custom_products"].extend(cats)
+            elif lt == "service":
+                breakdown["services"].extend(cats)
+        brand["offerings_breakdown"] = breakdown
         return brand
     except Exception as e:
         logger.exception("Exception occurred while fetching brand.", extra={"brand_id": brand_id})
