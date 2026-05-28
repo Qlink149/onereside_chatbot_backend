@@ -26,7 +26,7 @@ import random
 PRESENTER_FIELDS = {
     "product_id", "name", "price_inr", "brand_id", "brand_name", "category",
     "listing_type", "type", "style_tags", "ideal_for", "materials", "colors_available",
-    "description", "delivery_timeline",
+    "description", "delivery_timeline", "deliverables",
 }
 
 
@@ -499,11 +499,15 @@ class ProductAgent(Processor):
 
                             user_profile["last_shown_product"] = json.dumps(product)
 
-                            # scanned brand exit strategy
+                            # clear active brand when a product from a different brand is shown
                             scanned_brand_id = brand.get("brand_id", "") if brand else ""
-                            if scanned_brand_id and product.get("brand_id") != scanned_brand_id:
-                                user_profile["past_brand"] = scanned_brand_id
-                                user_profile["current_brand"] = ""
+                            requested_brand_id = requested_brand.get("brand_id", "") if requested_brand else ""
+                            shown_brand_id = product.get("brand_id", "")
+                            active_brand_id = scanned_brand_id or requested_brand_id
+                            if active_brand_id and shown_brand_id and shown_brand_id != active_brand_id:
+                                if scanned_brand_id:
+                                    user_profile["past_brand"] = scanned_brand_id
+                                    user_profile["current_brand"] = ""
                                 user_profile["requested_brand"] = None
 
                             product_category = (product.get("category") or "").lower()
