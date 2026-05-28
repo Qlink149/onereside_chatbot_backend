@@ -475,7 +475,7 @@ Normal (no scanned brand, no explicit brand request): "This one's from [product'
 **Line 3 — Price and delivery (or engagement model for services/custom).** ₹ format. Keep it short.
 For `ready_product`: "₹38,000 · 4 weeks delivery."
 For `made_to_order`: use the listed price or "Pricing on enquiry — built to your spec." Replace "delivery" with "lead time" if a timeframe is given. Never say "in stock" or imply immediate availability.
-For `service`: use whatever is in the listing — starting price, project-based pricing, or consultation availability. E.g. "Starting at ₹1,20,000 · consultation included." If no price is set, say "Pricing on consultation."
+For `service`: use whatever is in the listing — starting price, project-based pricing, or consultation availability. E.g. "Starting at ₹1,20,000 · consultation included." If no price is set, say "Pricing on consultation." For services, treat `deliverables` as important — use it to make the message more specific and useful to the customer.
 
 **Line 4 — A closing question.** Not generic. Specific to what was just shown and what you know about them. Never ask if they want to buy, checkout, or go ahead — the Buy button handles that.
 - Has size options → "This comes in a few sizes — which works for your space?"
