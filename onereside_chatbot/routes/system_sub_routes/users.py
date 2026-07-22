@@ -2,7 +2,9 @@ from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from onereside_chatbot.database.admin_log_utils import log_admin_action
 from onereside_chatbot.database.user_utils import (
+    delete_user_profile,
     get_all_users,
     get_user_by_object_id,
     get_user_profile,
@@ -49,3 +51,23 @@ def get_user_by_id(user_id: str, _: str = Depends(verify_api_key)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return _serialize(user)
+
+
+@router.delete("/{user_id}", status_code=204)
+def delete_user(user_id: str, _: str = Depends(verify_api_key)):
+    """Delete a user's profile document only. Orders/payments made by the user are left intact."""
+    try:
+        oid = ObjectId(user_id)
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid user ID format")
+
+    deleted = delete_user_profile(oid)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    log_admin_action(
+        action="delete_user",
+        target_type="user",
+        target_id=user_id,
+        details={"phone_number": deleted.get("phone_number"), "username": deleted.get("username")},
+    )

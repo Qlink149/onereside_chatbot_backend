@@ -131,6 +131,7 @@ ENV.bak/
 venv.bak/
 
 
-testing
+*testing
 postman.json
 
+*standards

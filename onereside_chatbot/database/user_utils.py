@@ -125,6 +125,20 @@ def get_user_by_object_id(user_id: ObjectId):
         logger.exception("Exception occurred while fetching user by id.", extra={"user_id": str(user_id)})
         raise e
 
+def delete_user_profile(user_id: ObjectId) -> dict | None:
+    """Delete a user's profile document only (orders/payments are untouched). Returns the deleted doc, or None if not found."""
+    try:
+        deleted = idac.find_one_and_delete({"_id": user_id})
+        if not deleted:
+            logger.warning("No user found to delete.", extra={"user_id": str(user_id)})
+            return None
+        logger.info("User profile deleted successfully.", extra={"user_id": str(user_id)})
+        return deleted
+    except Exception:
+        logger.exception("Exception occurred while deleting user profile.", extra={"user_id": str(user_id)})
+        raise
+
+
 def update_agent_request_flag(user_id: ObjectId):
     """Function to update the request agent flag."""
     try:

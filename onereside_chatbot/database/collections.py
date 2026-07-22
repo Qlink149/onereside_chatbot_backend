@@ -18,3 +18,9 @@ orders = db["orders"]
 orders.create_index("order_id", unique=True, sparse=True)
 refunds = db["refunds"]
 enquiries = db["enquiries"]
+
+messages = db["messages"]
+messages.create_index([("phone_number", 1), ("timestamp", -1)])
+
+admin_logs = db["admin_logs"]
+admin_logs.create_index([("timestamp", -1)])
