@@ -4,9 +4,11 @@ import random
 from onereside_chatbot.processors.abstract_processor import Processor
 from onereside_chatbot.utils.logger_config import logger
 from onereside_chatbot.database.db_utils import get_product_by_id, save_order, save_enquiry
+from onereside_chatbot.database.brand_utils import get_brand_by_id
 from onereside_chatbot.utils.razorpay_utils import create_payment_link
 from onereside_chatbot.models.enums import FLowId
-from onereside_chatbot.constants import ENQUIRY_RESPONSES, SUPPORT_NOTIFY_NUMBERS
+from onereside_chatbot.constants import SUPPORT_NOTIFY_NUMBERS, BRAND_ENQUIRY_RESPONSES
+from onereside_chatbot.utils.trace import record_event, set_agent
 from onereside_chatbot.whatsapp_functions.template.send_product_enquiry_template import send_product_enquiry_template
 
 class ProductCheckoutAgent(Processor):
@@ -17,15 +19,16 @@ class ProductCheckoutAgent(Processor):
         if "bot_response" in data:
             return False
         return True
-    
+
     async def process(self, data: dict) -> dict:
         """Process the input data and return the processed data."""
         phone_number = data["phone_number"]
         user_profile = data["user_profile"]
         username = user_profile["username"]
-        
+
         try:
             if "interactive" in data["messages"]:
+                set_agent(data, "ProductCheckoutAgent")
 
                 if "nfm_reply" in data["messages"]["interactive"]:
                     nfm_reply = data["messages"]["interactive"]["nfm_reply"]
@@ -53,6 +56,7 @@ class ProductCheckoutAgent(Processor):
                             }
 
                             user_profile["address"] = address
+                            record_event(data, "checkout_address_submitted")
 
                             formatted_address = (
                                 f"{address['personal_details']['first_name']} {address['personal_details']['last_name']}\n"
@@ -71,14 +75,52 @@ class ProductCheckoutAgent(Processor):
                                     "msgid": "address_confirmation",
                                 }
                             ]
-                    
-                
+
+
                 elif "button_reply" in data:
                     button_details = data.get("button_reply")
 
                     payload = json.loads(button_details.get("id"))
                     msgid = payload.get("msgid")
                     button_title = button_details.get("title")
+
+                    if msgid.startswith("enquire"):
+                        brand_id = msgid.split("$")[1]
+                        brand = get_brand_by_id(brand_id)
+
+                        if brand:
+                            record_event(data, "brand_enquiry_saved", brand_id=brand_id, brand_name=brand.get("brand_name", ""))
+                            save_enquiry({
+                                "phone_number": phone_number,
+                                "username": username,
+                                "type": "brand_enquiry",
+                                "brand": {
+                                    "brand_id": brand.get("brand_id"),
+                                    "brand_name": brand.get("brand_name", ""),
+                                },
+                            })
+                            logger.info(
+                                "Brand enquiry saved",
+                                extra={"phone_number": phone_number, "brand_id": brand_id},
+                            )
+                            for notify_number in SUPPORT_NOTIFY_NUMBERS:
+                                try:
+                                    send_product_enquiry_template(
+                                        phone_number=notify_number,
+                                        product_name=brand.get("brand_name", ""),
+                                        customer_name=username,
+                                        customer_phone=phone_number,
+                                    )
+                                except Exception as e:
+                                    logger.error(
+                                        "Failed to send brand enquiry template",
+                                        extra={"notify_number": notify_number, "error": e},
+                                    )
+
+                        brand_name = brand.get("brand_name", "this brand")
+                        data["bot_response"] = [{"type": "text", "text": random.choice(BRAND_ENQUIRY_RESPONSES).format(brand_name=brand_name)}]
+                        user_profile["service_selected"] = ""
+                        return data
 
                     if msgid.startswith("buy"):
                         ids = msgid.split("$")
@@ -88,6 +130,10 @@ class ProductCheckoutAgent(Processor):
 
                         if button_title == "Enquire Now":
                             if product:
+                                record_event(
+                                    data, "product_enquiry_saved",
+                                    product_id=prod_id, product_name=product.get("name", ""),
+                                )
                                 save_enquiry({
                                     "phone_number": phone_number,
                                     "username": username,
@@ -117,16 +163,19 @@ class ProductCheckoutAgent(Processor):
                                             extra={"notify_number": notify_number, "error": e},
                                         )
 
+                            product_name = product.get("name", "this item")
+                            brand_name = product.get("brand_name", "")
+                            brand_suffix = f" by *{brand_name}*" if brand_name else ""
                             data["bot_response"] = [
                                 {
                                     "type": "text",
-                                    "text": random.choice(ENQUIRY_RESPONSES),
+                                    "text": f"Your enquiry for *{product_name}*{brand_suffix} is in — the OneReside team will follow up with you shortly on pricing and next steps.\n\nFeel free to keep browsing in the meantime.",
                                 }
                             ]
                             user_profile["service_selected"] = ""
                             user_profile["selected_product_id"] = {}
                             return data
-                        
+
 
                         if user_profile.get("address"):
 
@@ -171,6 +220,13 @@ class ProductCheckoutAgent(Processor):
                                 description=f"Order for {selected_prod.get('name', '')}",
                             )
 
+                            record_event(
+                                data, "payment_link_created",
+                                product_id=selected_prod.get("product_id"),
+                                amount_inr=amount_inr,
+                                payment_link_id=payment_link_response.get("id"),
+                            )
+
                             order_doc = {
                                 "phone_number": phone_number,
                                 "username": username,
@@ -204,6 +260,7 @@ class ProductCheckoutAgent(Processor):
                             ]
 
                     elif msgid == "cancel_purchase":
+                        record_event(data, "checkout_cancelled")
                         user_profile["service_selected"] = ""
                         user_profile["selected_product_id"] = {}
 
@@ -219,17 +276,15 @@ class ProductCheckoutAgent(Processor):
                     data["bot_response"] = [
                         {
                             "type": "quickreply",
-                            "text": f"Please complete the checkout first., \n{
-                                 user_profile["address"]
-                            }",
+                            "text": f"Please complete the checkout first., \n{user_profile['address']}",
                             "caption": "Click the button to cancel.",
                             "options": [{"title": "cancel purchase"}],
                             "msgid": "cancel_purchase",
-                        } 
+                        }
                     ]
-            
+
             return data
-        
+
         except Exception as e:
             logger.exception(
                 "Exception occurred in GeneralAgent"

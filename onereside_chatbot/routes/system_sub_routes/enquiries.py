@@ -22,6 +22,7 @@ def list_enquiries(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     status: str | None = Query(None),
+    type: str | None = Query(None, description="Filter by enquiry type: brand_enquiry or product_enquiry"),
     brand_id: str | None = Query(None),
     phone_number: str | None = Query(None),
     _: str = Depends(verify_api_key),
@@ -32,6 +33,7 @@ def list_enquiries(
         skip=skip,
         limit=limit,
         status=status,
+        enquiry_type=type,
         brand_id=brand_id,
         phone_number=phone_number,
     )

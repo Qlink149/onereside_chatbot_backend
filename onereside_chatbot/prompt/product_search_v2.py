@@ -1,3 +1,5 @@
+# ruff: noqa
+
 # TEMPORARY: remove this block when cart/shortlist feature goes live
 _SINGLE_PURCHASE_NOTICE = (
     "When `show_cta: true`, also let them know: purchases are one at a time — "
@@ -234,7 +236,7 @@ Some messages are about products already shown — not about finding new ones. D
 
 Do not call `search_products` for these — there is nothing new to find. If a detail about a shown product is missing from context, you may call `get_product_by_id` to fetch it before replying. For totals and price questions, use the `price_inr` already available in shown products context — no tool call needed.
 """
- 
+
 
 
 product_recommender_prompt = """

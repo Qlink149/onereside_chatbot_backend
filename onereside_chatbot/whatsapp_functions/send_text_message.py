@@ -16,7 +16,7 @@ def send_text_message(phone_number: str, bot_response: str):
         "Sending text message to phone number with message",
         extra={"phone_number": phone_number, "bot_response": bot_response},
     )
-    
+
     source = GUPSHUP_SOURCE
     app_name = gupshup_app_name
 

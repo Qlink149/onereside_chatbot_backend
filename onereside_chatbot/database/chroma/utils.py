@@ -40,6 +40,7 @@ def build_search_text(product: dict) -> str:
         product.get("name") or "",
         f"Category: {product['category']}" if product.get("category") else "",
         f"Type: {product['type']}" if product.get("type") else "",
+        f"Size: {product['size']}" if product.get("size") else "",
         product.get("description") or "",
         labeled("Style tags", product.get("style_tags") or []),
         labeled("Materials", product.get("materials") or []),
@@ -55,13 +56,12 @@ def add_product(product: dict):
     product_id = product["product_id"]
     brand_id = product["brand_id"]
     category = product["category"]
-    listing_type = product.get("listing_type", "product")
     try:
         product_col, _ = _get_collections()
         product_col.add(
             ids=[product_id],
             documents=[build_search_text(product)],
-            metadatas=[{"brand_id": brand_id, "category": category, "product_id": product_id, "listing_type": listing_type, "type": product.get("type", "ready_product")}]
+            metadatas=[{"brand_id": brand_id, "category": category, "product_id": product_id}]
         )
         logger.info("Product added to vector DB.", extra={"product_id": product_id, "brand_id": brand_id})
     except Exception as e:
@@ -111,7 +111,7 @@ def update_product_embedding(product: dict):
         product_col.upsert(
             ids=[product_id],
             documents=[build_search_text(product)],
-            metadatas=[{"brand_id": product.get("brand_id", ""), "category": product.get("category", ""), "product_id": product_id, "listing_type": product.get("listing_type", "product"), "type": product.get("type", "ready_product")}]
+            metadatas=[{"brand_id": product.get("brand_id", ""), "category": product.get("category", ""), "product_id": product_id}]
         )
         logger.info("Product embedding updated in vector DB.", extra={"product_id": product_id})
     except Exception as e:
@@ -151,7 +151,6 @@ def _build_brand_text(brand: dict) -> str:
         brand.get("brand_name", ""),
         brand.get("brand_description", ""),
         labeled("Categories offered", brand.get("categories_offered", [])),
-        labeled("Product types", brand.get("product_types", [])),
     ]
     return " ; ".join(p for p in parts if p)
 
@@ -168,7 +167,9 @@ def add_brand(brand: dict):
                 "brand_id": brand_id,
                 "brand_name": brand.get("brand_name", ""),
                 "categories_offered": ", ".join(brand.get("categories_offered", [])),
-                "product_types": ", ".join(brand.get("product_types", [])),
+                "has_ready_products": brand.get("has_ready_products", False),
+                "has_custom_products": brand.get("has_custom_products", False),
+                "has_services": brand.get("has_services", False),
             }]
         )
         logger.info("Brand added to vector DB.", extra={"brand_id": brand_id})
@@ -189,7 +190,9 @@ def update_brand_embedding(brand: dict):
                 "brand_id": brand_id,
                 "brand_name": brand.get("brand_name", ""),
                 "categories_offered": ", ".join(brand.get("categories_offered", [])),
-                "product_types": ", ".join(brand.get("product_types", [])),
+                "has_ready_products": brand.get("has_ready_products", False),
+                "has_custom_products": brand.get("has_custom_products", False),
+                "has_services": brand.get("has_services", False),
             }]
         )
         logger.info("Brand embedding updated in vector DB.", extra={"brand_id": brand_id})
@@ -209,9 +212,10 @@ def delete_brand(brand_id: str):
         raise e
 
 
-def semantic_brand_search(query: str, n_results: int = 5) -> list[dict]:
+def semantic_brand_search(query: str, n_results: int = 5, where: dict = None) -> list[dict]:
     """
     Semantic search over the brands collection.
+    Pass `where` to filter by Chroma metadata (e.g. {"has_services": {"$eq": True}}).
     Returns a list of dicts with metadata + the embedded document text.
     """
     try:
@@ -219,6 +223,7 @@ def semantic_brand_search(query: str, n_results: int = 5) -> list[dict]:
         response = brand_col.query(
             query_texts=[query],
             n_results=n_results,
+            where=where,
             include=["metadatas", "documents"],
         )
         results = []
@@ -226,7 +231,7 @@ def semantic_brand_search(query: str, n_results: int = 5) -> list[dict]:
         documents = response.get("documents", [[]])[0]
         for meta, doc in zip(metadatas, documents):
             results.append({**meta, "search_text": doc})
-        logger.info("Brand semantic search completed.", extra={"query": query, "results": results})
+        logger.info("Brand semantic search completed.", extra={"query": query, "where": where, "results": results})
         return results
     except Exception as e:
         logger.error("Error during brand semantic search.", extra={"query": query, "error": e})

@@ -187,7 +187,7 @@ class ResponseManager:
             return send_image_message(
                 phone_number=phone_number, bot_response=bot_response
             )
-        elif media_type == "doc":
+        elif media_type == "document":
             return send_file_message(
                 phone_number=phone_number, bot_response=bot_response
             )

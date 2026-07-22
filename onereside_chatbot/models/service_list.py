@@ -8,4 +8,5 @@ class ServiceList(Enum):
     PRODUCT_SEARCH = "product_search"
     ONE_RESIDE = "one_reside"
     PRODUCT_CHECKOUT = "product_checkout"
+    SERVICE_CUSTOM = "service_custom"
 

@@ -5,6 +5,7 @@ from onereside_chatbot.processors.general_agent import GeneralAgent
 from onereside_chatbot.processors.product_search_agent import ProductAgent
 from onereside_chatbot.processors.one_reside_agent import OneResideAgent
 from onereside_chatbot.processors.product_checkout import ProductCheckoutAgent
+from onereside_chatbot.processors.service_custom_agent import ServiceCustomAgent
 from onereside_chatbot.processors.user_registration import (
     UserRegistration,
 )
@@ -31,17 +32,25 @@ class ProductSearchPipeline(Pipeline):
     def __init__(self) -> None:
         processors = [ProductAgent()]
         super().__init__(processors)
-        
+
 class OneResidePipeline(Pipeline):
     """Pipeline class for one reside."""
 
     def __init__(self) -> None:
         processors = [OneResideAgent()]
         super().__init__(processors)
-        
+
 class ProductCheckoutPipeline(Pipeline):
     """Pipeline class for one reside."""
 
     def __init__(self) -> None:
         processors = [ProductCheckoutAgent()]
+        super().__init__(processors)
+
+
+class ServiceCustomPipeline(Pipeline):
+    """Pipeline class for service and custom product enquiries."""
+
+    def __init__(self) -> None:
+        processors = [ServiceCustomAgent()]
         super().__init__(processors)

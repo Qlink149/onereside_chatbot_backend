@@ -2,8 +2,6 @@ from onereside_chatbot.database.user_utils import (
     save_to_mongo,
     save_user_profile,
     get_user_profile,
-    get_all_users,
-    get_user_by_object_id,
 )
 from onereside_chatbot.database.brand_utils import (
     get_brand_by_name,

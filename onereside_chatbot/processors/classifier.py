@@ -11,6 +11,7 @@ from onereside_chatbot.constants import UNSUPPORTED_TYPE_RESPONSES, AGENT_REQUES
 from onereside_chatbot.whatsapp_functions.template.send_customer_support_template import send_customer_support_template
 from onereside_chatbot.utils.get_openai_responses import get_openai_responses
 from onereside_chatbot.utils.logger_config import logger
+from onereside_chatbot.utils.trace import record_classifier, record_event
 
 india_tz = ZoneInfo('Asia/Kolkata')
 
@@ -26,7 +27,7 @@ class Classifier(Processor):
         elif data.get("by_pass"):
             return False
         return True
-    
+
 
     async def process(self, data: dict) -> dict:
         """Process the input data and return the processed data."""
@@ -51,14 +52,17 @@ class Classifier(Processor):
                     data["button_reply"] = interactive.get("button_reply")
                     button_title = data["button_reply"]["title"]
                     if button_title == "Buy":
+                        record_event(data, "classifier_shortcut", rule="button_reply", button=button_title, routed_to=ServiceList.PRODUCT_CHECKOUT.value)
                         user_profile["service_selected"] = ServiceList.PRODUCT_CHECKOUT.value
                         return data
                     if button_title == "Enquire Now":
+                        record_event(data, "classifier_shortcut", rule="button_reply", button=button_title, routed_to=ServiceList.PRODUCT_CHECKOUT.value)
                         user_profile["service_selected"] = ServiceList.PRODUCT_CHECKOUT.value
                         return data
-                    
+
                 if "nfm_reply" in interactive:
                     if interactive["nfm_reply"]["name"] == "flow":
+                        record_event(data, "classifier_shortcut", rule="flow_reply", routed_to=ServiceList.PRODUCT_CHECKOUT.value)
                         user_profile["service_selected"] = ServiceList.PRODUCT_CHECKOUT.value
                         return data
 
@@ -117,6 +121,13 @@ class Classifier(Processor):
                 classifier_response = json.loads(classifier_response)
                 category = classifier_response["category"].strip().lower()
 
+                record_classifier(
+                    data,
+                    category=category,
+                    raw_response=classifier_response,
+                    model="gpt-4.1-mini",
+                )
+
                 logger.info(
                     "Classifier category",
                     extra={
@@ -133,11 +144,16 @@ class Classifier(Processor):
                     user_profile["service_selected"] = ServiceList.PRODUCT_SEARCH.value
                     return data
 
+                if category == "service_custom":
+                    user_profile["service_selected"] = ServiceList.SERVICE_CUSTOM.value
+                    return data
+
                 if category == "one_reside":
                     user_profile["service_selected"] = ServiceList.ONE_RESIDE.value
                     return data
 
                 if category == "agent_request":
+                    record_event(data, "agent_request_raised")
                     user_profile["agent_request"] = True
                     data["bot_response"] = [
                         {
@@ -158,8 +174,9 @@ class Classifier(Processor):
                                 extra={"notify_number": notify_number, "error": e},
                             )
                     return data
-                
+
             else:
+                record_event(data, "unsupported_message_type", msg_type=data["messages"].get("type"))
                 data["bot_response"] = [
                     {
                         "type": "text",

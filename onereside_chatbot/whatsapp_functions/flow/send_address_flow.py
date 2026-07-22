@@ -59,4 +59,3 @@ def send_address_flow(phone_number: str):
     except Exception as e:
         logger.error("Error in sending spot booking flow", extra={"error": e})
         raise e
-   

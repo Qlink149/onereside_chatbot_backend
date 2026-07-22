@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+import uuid
+
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 
 from onereside_chatbot.database.brand_utils import (
@@ -10,9 +12,12 @@ from onereside_chatbot.database.brand_utils import (
     update_brand,
 )
 from onereside_chatbot.database.product_utils import remove_products_by_brand
+from onereside_chatbot.database.storage.r2_utils import upload_media
 from onereside_chatbot.routes.dependencies import verify_api_key
 
 router = APIRouter(prefix="/brands", tags=["brands"])
+
+CATALOGUE_CONTENT_TYPES = {"application/pdf", "image/jpeg", "image/png", "image/webp"}
 
 
 class BrandCreate(BaseModel):
@@ -20,9 +25,11 @@ class BrandCreate(BaseModel):
     brand_description: str
     brand_short_pitch: str
     categories_offered: list[str]
-    product_types: list[str]
-    consultation_available: bool
+    has_ready_products: bool = False
+    has_custom_products: bool = False
+    has_services: bool = False
     working_hours: str
+    catalogue_url: str | None = None
     brand_additional_context: str = ""
 
 
@@ -31,9 +38,11 @@ class BrandUpdate(BaseModel):
     brand_description: str | None = None
     brand_short_pitch: str | None = None
     categories_offered: list[str] | None = None
-    product_types: list[str] | None = None
-    consultation_available: bool | None = None
+    has_ready_products: bool | None = None
+    has_custom_products: bool | None = None
+    has_services: bool | None = None
     working_hours: str | None = None
+    catalogue_url: str | None = None
     brand_additional_context: str | None = None
 
 
@@ -80,6 +89,20 @@ def patch_brand(brand_id: str, body: BrandUpdate, _: str = Depends(verify_api_ke
     if not updated:
         raise HTTPException(status_code=404, detail="Brand not found")
     return updated
+
+
+@router.post("/catalogue/upload", status_code=201)
+async def upload_catalogue(
+    file: UploadFile = File(...),
+    _: str = Depends(verify_api_key),
+):
+    """Upload a brand catalogue or brochure to R2. Returns the URL to store on the brand."""
+    if file.content_type not in CATALOGUE_CONTENT_TYPES:
+        raise HTTPException(status_code=400, detail=f"Unsupported file type: {file.content_type}")
+    ext = file.filename.rsplit(".", 1)[-1] if "." in file.filename else "pdf"
+    key = f"brands/catalogues/{uuid.uuid4().hex}.{ext}"
+    url = upload_media(file.file, key, file.content_type)
+    return {"url": url}
 
 
 @router.delete("/{brand_id}", status_code=204)

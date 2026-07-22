@@ -3,7 +3,9 @@ import time
 from bson import ObjectId
 from pymongo import ReturnDocument
 
+from onereside_chatbot.constants import CHAT_HISTORY_MAX
 from onereside_chatbot.database.collections import idac
+from onereside_chatbot.database.message_utils import save_turn_messages
 from onereside_chatbot.utils.format_chathistory import format_chat_history
 from onereside_chatbot.utils.logger_config import logger
 
@@ -21,20 +23,29 @@ def save_to_mongo(data):
         user_profile_data = data["user_profile"]
 
         new_chat = format_chat_history(
-            user=query, assistant=assistant, phone_number=phone_number
+            user=query, assistant=assistant, phone_number=phone_number,
+            received_at=data.get("received_at"),
         )
 
-        current_history = user_profile_data.get("chat_history", [])
-        user_profile_data["chat_history"] = current_history + new_chat
-        user_profile_data["updated_at"] = int(time.time())
-        user_profile_data["username"] = data["whatsapp_username"]
+        # $push (not $set) the new entries so a concurrent write (e.g. a human
+        # takeover message landing mid-pipeline) can't be clobbered; $slice keeps
+        # the embedded array a rolling window — full history lives in `messages`.
+        profile_set = {k: v for k, v in user_profile_data.items() if k != "chat_history"}
+        profile_set["updated_at"] = int(time.time())
+        profile_set["username"] = data["whatsapp_username"]
 
         response = idac.find_one_and_update(
             {"phone_number": phone_number},
-            {"$set": user_profile_data},
+            {
+                "$set": profile_set,
+                "$push": {"chat_history": {"$each": new_chat, "$slice": -CHAT_HISTORY_MAX}},
+            },
             upsert=True,
             return_document=ReturnDocument.AFTER,
         )
+
+        # Per-message store with debug context for the admin dashboard
+        save_turn_messages(data)
 
         logger.info(
             "User profile saved successfully",

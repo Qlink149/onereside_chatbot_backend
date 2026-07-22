@@ -3,7 +3,7 @@ import hashlib
 import hmac
 import json
 
-from fastapi import APIRouter, BackgroundTasks, FastAPI, HTTPException, Request
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -16,10 +16,11 @@ from onereside_chatbot.database.db_utils import (
     save_payment,
     update_order_by_payment_link_id,
 )
-from onereside_chatbot.utils.format_chathistory import format_user
+from onereside_chatbot.utils.format_chathistory import format_assistant, format_user
 from onereside_chatbot.utils.pubsub import PubSubManager
 from onereside_chatbot.utils.env_load import razorpay_webhook_secrete
 from onereside_chatbot.constants import SUPPORT_NOTIFY_NUMBERS
+from onereside_chatbot.whatsapp_functions.mark_message_read import mark_message_read
 from onereside_chatbot.whatsapp_functions.template.send_user_order_payment_failed import (
     send_user_order_payment_failed,
 )
@@ -33,12 +34,14 @@ from onereside_chatbot.models.service_list import ServiceList
 from onereside_chatbot.pipelines.inference_pipeline import (
     InitialPipeline,
     GeneralPipeline,
-    ProductSearchPipeline, 
+    ProductSearchPipeline,
     OneResidePipeline,
-    ProductCheckoutPipeline
+    ProductCheckoutPipeline,
+    ServiceCustomPipeline,
 )
 from onereside_chatbot.processors.response_manager import ResponseManager
 from onereside_chatbot.utils.logger_config import logger
+from onereside_chatbot.utils.trace import record_event
 from onereside_chatbot.routes.systems import router as systems_router
 
 app = FastAPI(
@@ -170,13 +173,74 @@ async def razorpay_webhook(request: Request):
     return {"status": "ok"}
 
 
-@app.get("/ping")
+@app.api_route("/ping", methods=["GET", "HEAD"])
 def ping():
-    """Ping endpoint to check if the server is running."""
-    logger.info("Ping endpoint called")
+    """Ping endpoint to check if the server is running (GET and HEAD)."""
     return {"message": "OneReside Chatbot Server is up and running"}
 
 
+
+
+async def publish_turn_events(data: dict) -> None:
+    """Push the just-handled turn to any dashboard streaming this conversation.
+
+    Emits a `user_message` event for the incoming message and a `bot_message`
+    event per response part, carrying the debug trace as `context`. Failures
+    are logged and swallowed — SSE is best-effort and must never break the flow.
+    """
+    phone_number = data.get("phone_number")
+    if not phone_number:
+        return
+    try:
+        pubsub = PubSubManager()
+        now = int(time.time())
+
+        user_message = data.get("messages")
+        if user_message:
+            try:
+                content = format_user(user_message=user_message, phone_number=phone_number)
+            except Exception:
+                content = ""
+            await pubsub.publish(
+                phone_number,
+                {
+                    "type": "user_message",
+                    "phone_number": phone_number,
+                    "content": content,
+                    "whatsapp_username": data.get("whatsapp_username", ""),
+                    "timestamp": data.get("received_at") or now,
+                },
+            )
+
+        # Trace values are Mongo-safe but not always JSON-safe — round-trip with
+        # default=str so the SSE generator's json.dumps can never blow up on it.
+        context = data.get("trace")
+        if context is not None:
+            context = json.loads(json.dumps(context, default=str))
+
+        for part in data.get("bot_response", []):
+            if part.get("type") == "skip":
+                continue
+            try:
+                content = format_assistant(assistant_message=[part], phone_number=phone_number)
+            except Exception:
+                content = ""
+            await pubsub.publish(
+                phone_number,
+                {
+                    "type": "bot_message",
+                    "phone_number": phone_number,
+                    "content": content,
+                    "message_type": part.get("type"),
+                    "context": context,
+                    "timestamp": now,
+                },
+            )
+    except Exception as e:
+        logger.exception(
+            "Failed to publish turn events",
+            extra={"exception": e, "phone_number": phone_number},
+        )
 
 
 async def process_message(request_data: dict):
@@ -189,6 +253,10 @@ async def process_message(request_data: dict):
 
         messages = whatsapp_event["messages"][0]
         phone_number = messages["from"]
+
+        if "id" in messages:
+            mark_message_read(messages["id"])
+
         whatsapp_username = (
             request_data["entry"][0]["changes"][0]["value"]["contacts"][0][
                 "profile"
@@ -201,6 +269,7 @@ async def process_message(request_data: dict):
             "phone_number": phone_number,
             "messages": messages,
             "whatsapp_username": whatsapp_username,
+            "received_at": int(time.time()),
         }
         logger.info(
             "Data object to pipeline",
@@ -217,6 +286,7 @@ async def process_message(request_data: dict):
                     phone_number=phone_number,
                     user_message=messages,
                     whatsapp_username=whatsapp_username,
+                    received_at=data["received_at"],
                 )
                 pubsub = PubSubManager()
                 await pubsub.publish(
@@ -251,6 +321,7 @@ async def process_message(request_data: dict):
 
             save_to_mongo(data=data)
             response_manager.handle_responses(data=data)
+            await publish_turn_events(data)
 
         else:
             logger.info(
@@ -286,15 +357,23 @@ async def process_message(request_data: dict):
             ):
                 pipeline = ProductCheckoutPipeline()
 
+            elif (
+                user_profile["service_selected"]
+                == ServiceList.SERVICE_CUSTOM.value
+            ):
+                pipeline = ServiceCustomPipeline()
+
             data = await pipeline.run(data=data)
             save_to_mongo(data=data)
             response_manager.handle_responses(data=data)
+            await publish_turn_events(data)
 
     except Exception as e:
         logger.exception(
             "Exception occured while running message endpoint",
             extra={"exception": e, "phone_number": phone_number},
         )
+        record_event(data, "pipeline_error", error=f"{type(e).__name__}: {e}")
         data["bot_response"] = [
             {
                 "type": "text",
@@ -303,6 +382,7 @@ async def process_message(request_data: dict):
         ]
         save_to_mongo(data=data)
         response_manager.handle_responses(data=data)
+        await publish_turn_events(data)
 
 
 @app.post("/gupshup/message/onereside")

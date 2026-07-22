@@ -1,11 +1,12 @@
 import json
 
-from onereside_chatbot.database.brand_utils import get_brands_summary
+from onereside_chatbot.database.brand_utils import get_brands_summary, get_brand_by_id
 from onereside_chatbot.database.chroma.utils import semantic_brand_search
 from onereside_chatbot.processors.abstract_processor import Processor
 from onereside_chatbot.prompt.one_reside import one_reside_agent_prompt, output_schema, search_brands_tool, list_all_brands_tool
 from onereside_chatbot.utils.get_openai_client import openai_client
 from onereside_chatbot.utils.logger_config import logger
+from onereside_chatbot.utils.trace import record_tool_call, set_agent
 
 
 class OneResideAgent(Processor):
@@ -19,6 +20,14 @@ class OneResideAgent(Processor):
     def handle_search_brands(self, query: str) -> str:
         """Semantic search for brands matching the user's query."""
         brands = semantic_brand_search(query)
+        # Chroma only stores name/description/categories — enrich the top match
+        # with its full Mongo doc so founder/detail questions can be answered
+        # from real data instead of the model guessing.
+        if brands:
+            top = get_brand_by_id(brands[0].get("brand_id", ""))
+            if top:
+                brands[0]["brand_additional_context"] = top.get("brand_additional_context", "")
+                brands[0]["brand_description"] = top.get("brand_description", "")
         return json.dumps({"query": query, "brands": brands})
 
     def handle_list_all_brands(self) -> str:
@@ -40,6 +49,8 @@ class OneResideAgent(Processor):
                 return data
 
             user_query = data["messages"]["text"]["body"]
+
+            set_agent(data, "OneResideAgent", model="gpt-4.1-mini")
 
             chat_history = user_profile.get("chat_history", [])[-10:]
             chat_history_str = "\n".join(
@@ -78,6 +89,7 @@ class OneResideAgent(Processor):
                         tool_result = self.handle_search_brands(args.get("query", ""))
 
                     logger.info("Tool invoked", extra={"tool": tool_call.name, "arguments": args, "result": tool_result})
+                    record_tool_call(data, tool=tool_call.name, arguments=args, output=tool_result)
                     tool_outputs.append({
                         "type": "function_call_output",
                         "call_id": tool_call.call_id,
