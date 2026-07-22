@@ -32,6 +32,10 @@ CALLCHIMP_ROUTE = "https://api.callchimp.ai/v1"
 
 TEXT_EMBEDDING_MODEL = "text-embedding-3-small"
 
+# Rolling window kept on the user doc for LLM context — the full history lives
+# in the `messages` collection (see database/message_utils.py).
+CHAT_HISTORY_MAX = 200
+
 RAZORPAY_REDIRECT = "https://wa.me/919594923839"
 
 ACK_MESSAGES = [
@@ -47,6 +51,13 @@ AGENT_REQUEST_RESPONSES = [
     "Done — our team has been looped in and will reach out to you soon.\n\nFeel free to keep browsing in the meantime. I'm here if you need anything.",
     "I've let the team know — someone from One Reside will be in touch with you shortly.\n\nUntil then, happy to keep helping you explore.",
     "Our team's been notified and will connect with you soon.\n\nIn the meantime, let me know if there's anything else I can help you with.",
+]
+
+BRAND_ENQUIRY_RESPONSES = [
+    "Your enquiry for *{brand_name}* has been received and is now being taken forward by the One Reside team. They'll be in touch shortly to guide the next steps and connect you with the brand.\n\nIn the meantime, feel free to continue exploring other brands, products, and services on One Reside.",
+    "Your enquiry for *{brand_name}* is now with the One Reside team, who will reach out shortly to help take this forward and coordinate the next steps with the brand.\n\nWhile you wait, feel free to explore more brands, products, and services on One Reside.",
+    "Your enquiry for *{brand_name}* has been shared with the One Reside team and will be reviewed shortly. They'll connect with you soon to guide the next steps and help move this forward.\n\nUntil then, you're welcome to continue discovering more across One Reside.",
+    "The One Reside team has received your enquiry for *{brand_name}* and will be in touch shortly to help facilitate the next steps with the brand.\n\nIn the meantime, feel free to keep exploring other brands, products, and services on One Reside.",
 ]
 
 ENQUIRY_RESPONSES = [

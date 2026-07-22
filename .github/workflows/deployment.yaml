@@ -33,55 +33,100 @@ jobs:
       - name: Build and push Docker image
         run: |
           export DOCKER_BUILDKIT=1
-          REGISTRY_PATH="ewr.vultrcr.com/qlink01/onereside_bot"
+          REGISTRY_PATH="syd.vultrcr.com/qlink01/onereside_bot"
           docker build -t $REGISTRY_PATH:latest .
           docker push $REGISTRY_PATH:latest
+
+      - name: Copy docker-compose.yml to Droplet
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          source: "docker-compose.yml"
+          target: "/opt/qlink"
 
       - name: Deploy to DigitalOcean Droplet
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ secrets.SERVER_HOST }} 
-          username: ${{ secrets.SERVER_USERNAME }} 
-          password: ${{ secrets.SERVER_PASSWORD }} 
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          password: ${{ secrets.SERVER_PASSWORD }}
           script: |
+            set -e
+            mkdir -p /opt/qlink
+            cd /opt/qlink
+
+            # Write .env from GitHub secrets (GitHub stays the single source of truth).
+            # Written with restrictive perms; overwritten fresh on every deploy.
+            umask 077
+            cat > .env <<'EOF'
+            PYTHONUNBUFFERED=1
+            PYTHONDONTWRITEBYTECODE=1
+            OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+            MONGO_URI=${{ secrets.MONGO_URI }}
+            ENV_MODE=${{ secrets.ENV_MODE }}
+            GUPSHUP_APP_ID=${{ secrets.GUPSHUP_APP_ID }}
+            GUPSHUP_TOKEN=${{ secrets.GUPSHUP_TOKEN }}
+            GUPSHUP_APP_NAME=${{ secrets.GUPSHUP_APP_NAME }}
+            GUPSHUP_API_KEY=${{ secrets.GUPSHUP_API_KEY }}
+            CHROMA_API_KEY=${{ secrets.CHROMA_API_KEY }}
+            CHROMA_TENANT=${{ secrets.CHROMA_TENANT }}
+            RAZORPAY_WEBHOOK_SECRET=${{ secrets.RAZORPAY_WEBHOOK_SECRET }}
+            RAZORPAY_APP_ID=${{ secrets.RAZORPAY_APP_ID }}
+            RAZORPAY_APP_SECRETE=${{ secrets.RAZORPAY_APP_SECRETE }}
+            DASHBOARD_API_KEY=${{ secrets.DASHBOARD_API_KEY }}
+            LOGIN_USERNAME=${{ secrets.LOGIN_USERNAME }}
+            LOGIN_PASS=${{ secrets.LOGIN_PASS }}
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            R2_ACCESS_KEY=${{ secrets.R2_ACCESS_KEY }}
+            R2_SECRET_KEY=${{ secrets.R2_SECRET_KEY }}
+            R2_ENDPOINT=${{ secrets.R2_ENDPOINT }}
+            R2_BUCKET=${{ secrets.R2_BUCKET }}
+            R2_PUBLIC_URL=${{ secrets.R2_PUBLIC_URL }}
+            EOF
+
+            # Ensure Docker container logs are kept for at most 2 days.
+            # json-file rotation (in compose) caps size; logrotate caps age.
+            cat > /etc/logrotate.d/docker-qlink <<'EOF'
+            /var/lib/docker/containers/*/*-json.log {
+              daily
+              rotate 2
+              compress
+              missingok
+              notifempty
+              copytruncate
+            }
+            EOF
+
+            # Ensure Docker Compose v2 (the `docker compose` plugin) is present.
+            # Installs the plugin binary directly so it works regardless of how
+            # Docker was installed. Idempotent — only runs if missing.
+            if ! docker compose version >/dev/null 2>&1; then
+              echo "Docker Compose v2 not found — installing plugin..."
+              mkdir -p /usr/local/lib/docker/cli-plugins
+              curl -SL "https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-$(uname -m)" \
+                -o /usr/local/lib/docker/cli-plugins/docker-compose
+              chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+              docker compose version
+            fi
+
             # Login to Vultr Container Registry
             docker login -u ${{ secrets.VULTR_REGISTRY_USERNAME }} -p ${{ secrets.VULTR_REGISTRY_PASSWORD }} ${{ secrets.VULTR_REGISTRY_URL }}
 
-            # Pull the latest image
-            docker pull ewr.vultrcr.com/qlink01/onereside_bot:latest
+            # One-time migration: remove the old container that was created by
+            # `docker run` (not compose) so compose can take ownership of the name.
+            # Harmless on subsequent deploys since compose recreates it anyway.
+            if ! docker inspect -f '{{ index .Config.Labels "com.docker.compose.project" }}' qlink 2>/dev/null | grep -q .; then
+              docker rm -f qlink 2>/dev/null || true
+            fi
 
-            # Stop and remove existing container if it exists
-            docker stop qlink || true
-            docker rm qlink || true
+            # Pull the latest image and (re)start the stack declaratively
+            docker compose pull
+            docker compose up -d --remove-orphans
 
-            # Run new container
-            docker run -d \
-              --name qlink \
-              -p 8000:8000 \
-              -e PYTHONUNBUFFERED=1 \
-              -e PYTHONDONTWRITEBYTECODE=1 \
-              -e OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }} \
-              -e MONGO_URI=${{ secrets.MONGO_URI }} \
-              -e ENV_MODE=${{ secrets.ENV_MODE }} \
-              -e GUPSHUP_APP_ID=${{ secrets.GUPSHUP_APP_ID }} \
-              -e GUPSHUP_TOKEN=${{ secrets.GUPSHUP_TOKEN }} \
-              -e GUPSHUP_APP_NAME=${{ secrets.GUPSHUP_APP_NAME }} \
-              -e GUPSHUP_API_KEY=${{ secrets.GUPSHUP_API_KEY }} \
-              -e CHROMA_API_KEY=${{ secrets.CHROMA_API_KEY }} \
-              -e CHROMA_TENANT=${{ secrets.CHROMA_TENANT }} \
-              -e RAZORPAY_WEBHOOK_SECRET=${{ secrets.RAZORPAY_WEBHOOK_SECRET }} \
-              -e RAZORPAY_APP_ID=${{ secrets.RAZORPAY_APP_ID }} \
-              -e RAZORPAY_APP_SECRETE=${{ secrets.RAZORPAY_APP_SECRETE }} \
-              -e DASHBOARD_API_KEY=${{ secrets.DASHBOARD_API_KEY }} \
-              -e LOGIN_USERNAME=${{ secrets.LOGIN_USERNAME }} \
-              -e LOGIN_PASS=${{ secrets.LOGIN_PASS }} \
-              -e JWT_SECRET=${{ secrets.JWT_SECRET }} \
-              -e R2_ACCESS_KEY=${{ secrets.R2_ACCESS_KEY }} \
-              -e R2_SECRET_KEY=${{ secrets.R2_SECRET_KEY }} \
-              -e R2_ENDPOINT=${{ secrets.R2_ENDPOINT }} \
-              -e R2_BUCKET=${{ secrets.R2_BUCKET }} \
-              -e R2_PUBLIC_URL=${{ secrets.R2_PUBLIC_URL }} \
-              ewr.vultrcr.com/qlink01/onereside_bot
+            # Show status for the deploy log
+            docker compose ps
 
       - name: Cleanup Old Images
         uses: appleboy/ssh-action@master

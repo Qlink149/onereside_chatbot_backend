@@ -1,10 +1,16 @@
+# OneReside Bot
 
+FastAPI backend for the OneReside WhatsApp bot — brand/product Q&A, product
+search, checkout, and service/custom-product enquiries over WhatsApp
+(via Gupshup), backed by OpenAI, MongoDB, Chroma, and Cloudflare R2, plus a
+JWT-protected admin API for a separate dashboard.
 
-## Architecture of Bot
+## Documentation
 
-This diagram represents the architecture of the system:
-
-![Architecture Diagram](image.png)
+- [`resources/ARCHITECTURE.md`](resources/ARCHITECTURE.md) — system architecture: entry points, the inbound-message pipeline, payments, admin API, data layer, deployment.
+- [`resources/DATABASE_DESIGN.md`](resources/DATABASE_DESIGN.md) — MongoDB/Chroma/R2 schema, field by field, with relationships and indexes.
+- [`resources/AGENT_DESIGN.md`](resources/AGENT_DESIGN.md) — every LLM agent's model, tools, and control flow.
+- [`resources/CHANGELOGS.md`](resources/CHANGELOGS.md) — dated log of business-facing changes.
 
 ## Getting Started
 
@@ -51,3 +57,5 @@ Please install the following tools:
 ### Misc Notes
 
 - If you want to ignore "Line too long" errors for a specific file, because you either don't like how `ruff` formats it (or isn't able to), you can add a comment at the top of the file: `# ruff: noqa: E501` which will ignore that specific error for that file. This is not recommended, but we don't want to waste time fixing line lengths but be conscious that your code may be harder to read.
+
+<img src="resources/assets/hue-bar.svg" width="100%" height="4" alt=""/>

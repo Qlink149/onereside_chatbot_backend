@@ -4,6 +4,7 @@ import re
 
 from onereside_chatbot.database.db_utils import get_brand_by_id, get_brand_by_name
 from onereside_chatbot.models.service_list import ServiceList
+from onereside_chatbot.utils.trace import record_event
 
 class QRProcessor(Processor):
     """Search a genral Query."""
@@ -13,7 +14,7 @@ class QRProcessor(Processor):
         if "bot_response" in data:
             return False
         return True
-    
+
     def detect_qr_message(self, text: str) -> dict:
         """
         Checks if the message is a QR scanned prefilled message.
@@ -31,7 +32,7 @@ class QRProcessor(Processor):
             "is_qr": False,
             "brand_name": None
         }
-    
+
     async def process(self, data: dict) -> dict:
         """Process the input data and return the processed data."""
         phone_number = data["phone_number"]
@@ -46,7 +47,7 @@ class QRProcessor(Processor):
                 },
             )
             return data
-        
+
 
         if "text" in data["messages"]:
             user_query = data["messages"]["text"]["body"]
@@ -61,14 +62,22 @@ class QRProcessor(Processor):
                     user_profile["current_brand"] = current_brand.get("brand_id")
                     user_profile["requested_brand"] = None  # QR scan resets any mid-chat brand request
 
+                    record_event(
+                        data,
+                        "qr_scan",
+                        brand_id=current_brand.get("brand_id"),
+                        brand_name=current_brand.get("brand_name"),
+                    )
+
                     data["brand"] = current_brand
                     data[
                         "user_profile"
                     ]["service_selected"] = ServiceList.GENERAL.value
-                    
+
                     data["by_pass"] = True
 
                 else:
+                    record_event(data, "qr_invalid", scanned_brand_name=qr_check.get("brand_name"))
                     data["bot_response"] = [
                         {
                             "type": "text",
@@ -81,6 +90,12 @@ class QRProcessor(Processor):
                     current_brand = get_brand_by_id(brand_id=user_profile.get("current_brand"))
 
                     if current_brand:
+                        record_event(
+                            data,
+                            "brand_context_active",
+                            brand_id=current_brand.get("brand_id"),
+                            brand_name=current_brand.get("brand_name"),
+                        )
                         data["brand"] = current_brand
                     else:
                         data["bot_response"] = [
@@ -89,7 +104,7 @@ class QRProcessor(Processor):
                                 "text": "The Brand no longer exist try scanning new qr.",
                             }
                         ]
-                    
+
                 else:
                     pass  # no brand context — product search handles all-brands mode
 

@@ -7,41 +7,6 @@ from onereside_chatbot.database.collections import company, product as product_c
 from onereside_chatbot.utils.logger_config import logger
 
 
-def _build_service_listing(brand: dict) -> dict:
-    """Build a consultation service listing doc from brand data."""
-    categories = brand.get("categories_offered", [])
-    description_parts = [brand.get("brand_description", "")]
-    if categories:
-        description_parts.append(f"Areas covered: {', '.join(categories)}.")
-    if brand.get("working_hours"):
-        description_parts.append(f"Available: {brand['working_hours']}.")
-    return {
-        "brand_id": brand["brand_id"],
-        "name": f"{brand['brand_name']} — Consultation",
-        "category": "Consultation",
-        "listing_type": "service",
-        "type": "ready_product",
-        "description": "\n\n".join(p for p in description_parts if p),
-        "deliverables": categories,
-        "style_tags": [],
-        "materials": [],
-        "colors_available": [],
-        "ideal_for": [],
-        "size": None,
-        "price_inr": None,
-        "delivery_weeks": 0,
-        "inventory_status": "available",
-        "media_url": [],
-    }
-
-
-def _fetch_listing_types_for_brands(brand_ids: list) -> dict:
-    """Returns {brand_id: [listing_types]} for the given brand_ids in one aggregation."""
-    pipeline = [
-        {"$match": {"brand_id": {"$in": brand_ids}, "listing_type": {"$nin": [None, ""]}}},
-        {"$group": {"_id": "$brand_id", "listing_types": {"$addToSet": "$listing_type"}}},
-    ]
-    return {doc["_id"]: sorted(doc["listing_types"]) for doc in product_col.aggregate(pipeline)}
 
 
 def _generate_brand_id(brand_name: str) -> str:
@@ -119,14 +84,18 @@ def get_all_brands(skip: int = 0, limit: int = 20) -> tuple[int, list]:
     """Get paginated list of all brands. Returns (total, brands)."""
     try:
         total = company.count_documents({})
-        projection = {"brand_id": 1, "brand_name": 1, "categories_offered": 1, "brand_description": 1}
+        projection = {
+            "brand_id": 1,
+            "brand_name": 1,
+            "brand_short_pitch": 1,
+            "categories_offered": 1,
+            "has_ready_products": 1,
+            "has_custom_products": 1,
+            "has_services": 1,
+        }
         brands = list(company.find({}, projection).skip(skip).limit(limit))
         for b in brands:
-            b["_id"] = str(b["_id"])
-        brand_ids = [b["brand_id"] for b in brands if b.get("brand_id")]
-        listing_types_map = _fetch_listing_types_for_brands(brand_ids)
-        for b in brands:
-            b["listing_types"] = listing_types_map.get(b.get("brand_id"), [])
+            b.pop("_id", None)
         logger.info("Fetched brands", extra={"skip": skip, "limit": limit, "total": total})
         return total, brands
     except Exception as e:
@@ -145,15 +114,11 @@ def get_brands_summary() -> list:
 
 def create_brand(data: dict) -> dict:
     """Insert a new brand into MongoDB with an auto-generated brand_id."""
-    from onereside_chatbot.database.product_utils import create_product
     try:
         data["brand_id"] = _generate_brand_id(data["brand_name"])
         company.insert_one(data)
         data.pop("_id", None)
         add_brand(data)
-        if data.get("consultation_available"):
-            create_product(_build_service_listing(data))
-            logger.info("Auto-created consultation service listing.", extra={"brand_id": data["brand_id"]})
         logger.info("Brand created successfully.", extra={"brand_id": data["brand_id"]})
         return data
     except Exception as e:
@@ -163,7 +128,6 @@ def create_brand(data: dict) -> dict:
 
 def update_brand(brand_id: str, update_data: dict) -> dict | None:
     """Update a brand by brand_id. brand_id itself cannot be changed."""
-    from onereside_chatbot.database.product_utils import create_product, remove_product
     try:
         result = company.find_one_and_update(
             {"brand_id": brand_id},
@@ -175,19 +139,6 @@ def update_brand(brand_id: str, update_data: dict) -> dict | None:
             return None
         result.pop("_id", None)
         update_brand_embedding(result)
-
-        if "consultation_available" in update_data:
-            existing = product_col.find_one(
-                {"brand_id": brand_id, "listing_type": "service", "category": "Consultation"},
-                {"product_id": 1},
-            )
-            if update_data["consultation_available"] and not existing:
-                create_product(_build_service_listing(result))
-                logger.info("Auto-created consultation service listing.", extra={"brand_id": brand_id})
-            elif not update_data["consultation_available"] and existing:
-                remove_product(existing["product_id"])
-                logger.info("Removed consultation service listing.", extra={"brand_id": brand_id})
-
         logger.info("Brand updated successfully.", extra={"brand_id": brand_id})
         return result
     except Exception as e:

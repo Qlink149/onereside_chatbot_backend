@@ -42,7 +42,10 @@ async def get_openai_responses(
             "Response from OpenAI for agent",
             extra={"response": response, "agent_name": agent_name},
         )
-        return response.output[0].content[0].text
+        for item in response.output:
+            if item.type == "message" and item.content and item.content[0].text:
+                return item.content[0].text
+        return ""
     except Exception as e:
         logger.error(
             "Error in getting response from OpenAI", extra={"exception": e}

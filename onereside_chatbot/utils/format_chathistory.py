@@ -1,4 +1,5 @@
 import json
+import time
 
 from onereside_chatbot.utils.logger_config import logger
 
@@ -39,6 +40,12 @@ def format_assistant(assistant_message, phone_number):
 
             elif message_type == "text":
                 body += f"{assistant['text']}"
+
+            elif message_type == "cta_url":
+                body += f"\nSent payment link — {assistant.get('text', '')} [{assistant.get('display_text', 'Pay Now')}]"
+
+            elif message_type == "template":
+                body += f"\nSent template — [{assistant.get('template', '')}]"
 
             elif message_type == "skip":
                 continue
@@ -90,7 +97,7 @@ def format_user(user_message, phone_number):
         raise e
 
 
-def format_chat_history(user, assistant, phone_number):
+def format_chat_history(user, assistant, phone_number, received_at: int = None):
     """Format chat history in user assistant way."""
     try:
         chat_history = [
@@ -99,12 +106,14 @@ def format_chat_history(user, assistant, phone_number):
                 "content": format_user(
                     user_message=user, phone_number=phone_number
                 ),
+                "timestamp": received_at or int(time.time()),
             },
             {
                 "role": "assistant",
                 "content": format_assistant(
                     assistant_message=assistant, phone_number=phone_number
                 ),
+                "timestamp": int(time.time()),
             },
         ]
 

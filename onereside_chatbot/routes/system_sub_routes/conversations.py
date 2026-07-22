@@ -7,6 +7,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from onereside_chatbot.database.conversation_utils import save_agent_message, set_takeover
+from onereside_chatbot.database.message_utils import get_messages_page
 from onereside_chatbot.database.user_utils import get_user_profile, update_agent_request_flag
 from onereside_chatbot.routes.dependencies import verify_api_key
 from onereside_chatbot.utils.logger_config import logger
@@ -87,6 +88,29 @@ def get_conversation_history(phone_number: str, _=Depends(verify_api_key)):
         "username": user.get("username", ""),
         "chat_history": user.get("chat_history", []),
         "human_takeover": user.get("human_takeover", {"active": False}),
+    }
+
+
+@router.get("/{phone_number}/messages")
+def get_conversation_messages(
+    phone_number: str,
+    skip: int = 0,
+    limit: int = 50,
+    _=Depends(verify_api_key),
+):
+    """Paginated per-message docs with debug context (classifier, agent, tool calls).
+
+    Newest first — page back in time with `skip`.
+    """
+    limit = max(1, min(limit, 200))
+    skip = max(0, skip)
+    total, docs = get_messages_page(phone_number, skip=skip, limit=limit)
+    return {
+        "phone_number": phone_number,
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+        "messages": docs,
     }
 
 

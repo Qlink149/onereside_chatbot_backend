@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 from datetime import datetime
 from threading import Lock
 
@@ -24,26 +23,19 @@ class SingletonLogger:
             return cls._instance
 
     def _initialize_logger(self):
-        log_file_path = "logs/app.log"
-        os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
-
         self.logger = logging.getLogger("SingletonLogger")
         self.logger.setLevel(logging.DEBUG)
 
         # Avoid duplicate handlers
         if not self.logger.handlers:
+            # Log to stdout only. Docker captures stdout and rotates it
+            # (size + 2-day age cap), so an in-container file log would be
+            # redundant, unbounded, and wiped on every redeploy.
             stream_handler = logging.StreamHandler()
             stream_handler.setLevel(logging.DEBUG)
-
-            file_handler = logging.FileHandler(filename=log_file_path, mode="a")
-            file_handler.setLevel(logging.DEBUG)
-
-            formatter = JsonFormatter()
-            stream_handler.setFormatter(formatter)
-            file_handler.setFormatter(formatter)
+            stream_handler.setFormatter(JsonFormatter())
 
             self.logger.addHandler(stream_handler)
-            self.logger.addHandler(file_handler)
 
 
 class JsonFormatter(logging.Formatter):

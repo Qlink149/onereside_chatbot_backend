@@ -1,11 +1,12 @@
 import json
 
-from onereside_chatbot.database.brand_utils import get_brands_summary
+from onereside_chatbot.database.brand_utils import get_brands_summary, get_brand_by_id
 from onereside_chatbot.database.chroma.utils import semantic_brand_search
 from onereside_chatbot.processors.abstract_processor import Processor
 from onereside_chatbot.prompt.general_agent import build_general_agent_prompt, output_schema, search_brands_tool, list_all_brands_tool
 from onereside_chatbot.utils.get_openai_client import openai_client
 from onereside_chatbot.utils.logger_config import logger
+from onereside_chatbot.utils.trace import record_tool_call, set_agent
 
 class GeneralAgent(Processor):
     """Search a genral Query."""
@@ -15,19 +16,21 @@ class GeneralAgent(Processor):
         if "bot_response" in data:
             return False
         return True
-    
+
     async def process(self, data: dict) -> dict:
         """Process the input data and return the processed data."""
         phone_number = data["phone_number"]
         user_profile = data["user_profile"]
         username = user_profile["username"]
         brand = data.get("brand")
-        
+
         try:
             if "text" in data["messages"]:
                 user_query = data["messages"]["text"]["body"]
 
-                # prompt 
+                set_agent(data, "GeneralAgent", model="gpt-4.1-mini")
+
+                # prompt
                 general_prompt = build_general_agent_prompt(
                     brand=brand
                 )
@@ -80,9 +83,18 @@ class GeneralAgent(Processor):
                         tool_result = json.dumps({"brands": brands})
                     else:
                         brands = semantic_brand_search(args.get("query", ""))
+                        # Chroma only stores name/description/categories — enrich the top match
+                        # with its full Mongo doc so non-scanned brands get the same depth
+                        # (brand_additional_context) as the scanned brand.
+                        if brands:
+                            top = get_brand_by_id(brands[0].get("brand_id", ""))
+                            if top:
+                                brands[0]["brand_additional_context"] = top.get("brand_additional_context", "")
+                                brands[0]["brand_description"] = top.get("brand_description", "")
                         tool_result = json.dumps({"query": args.get("query", ""), "brands": brands})
 
                     logger.info("Tool invoked", extra={"tool": tool_call.name, "arguments": args, "result": tool_result})
+                    record_tool_call(data, tool=tool_call.name, arguments=args, output=tool_result)
 
                     follow_up_messages = messages + list(response.output) + [
                         {
@@ -118,7 +130,7 @@ class GeneralAgent(Processor):
 
 
             return data
-        
+
         except Exception as e:
             logger.exception(
                 "Exception occurred in GeneralAgent"

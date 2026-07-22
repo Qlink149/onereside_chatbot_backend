@@ -42,4 +42,3 @@ class UserRegistration(Processor):
         data["user_profile"] = response
 
         return data
- 

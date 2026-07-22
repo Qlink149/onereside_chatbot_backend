@@ -9,11 +9,14 @@ from onereside_chatbot.utils.logger_config import logger
 _LIST_PROJECTION = {
     "phone_number": 1,
     "username": 1,
+    "type": 1,
     "product.product_id": 1,
     "product.name": 1,
     "product.brand_id": 1,
     "product.brand_name": 1,
     "product.category": 1,
+    "brand.brand_id": 1,
+    "brand.brand_name": 1,
     "status": 1,
     "created_at": 1,
 }
@@ -39,6 +42,7 @@ def get_all_enquiries(
     skip: int = 0,
     limit: int = 20,
     status: str | None = None,
+    enquiry_type: str | None = None,
     brand_id: str | None = None,
     phone_number: str | None = None,
 ) -> tuple[int, list]:
@@ -47,8 +51,13 @@ def get_all_enquiries(
         query = {}
         if status:
             query["status"] = status
+        if enquiry_type:
+            query["type"] = enquiry_type
         if brand_id:
-            query["product.brand_id"] = brand_id
+            query["$or"] = [
+                {"product.brand_id": brand_id},
+                {"brand.brand_id": brand_id},
+            ]
         if phone_number:
             query["phone_number"] = phone_number
 

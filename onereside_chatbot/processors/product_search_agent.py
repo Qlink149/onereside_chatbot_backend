@@ -16,6 +16,7 @@ from onereside_chatbot.database.chroma.utils import semantic_search, semantic_br
 from onereside_chatbot.database.brand_utils import get_brand_by_id
 from onereside_chatbot.database.db_utils import get_product_by_id, get_brands_by_ids, get_catalog_metadata
 from onereside_chatbot.whatsapp_functions.send_text_message import send_text_message
+from onereside_chatbot.utils.trace import record_event, record_tool_call, set_agent
 from onereside_chatbot.constants import ACK_MESSAGES
 
 import json
@@ -26,7 +27,7 @@ import random
 PRESENTER_FIELDS = {
     "product_id", "name", "price_inr", "brand_id", "brand_name", "category",
     "listing_type", "type", "style_tags", "ideal_for", "materials", "colors_available",
-    "description", "delivery_timeline", "deliverables",
+    "description", "size", "delivery_weeks", "deliverables",
 }
 
 
@@ -58,26 +59,26 @@ class ProductAgent(Processor):
             return False
         return True
 
-    def handle_search(self, args: dict, exclude_ids: list) -> list:
+    def handle_search(self, args: dict, exclude_ids: list) -> tuple:
         """
         Single search handler.
         - Semantic search with optional price / category post-filtering.
         - If brand_id is passed but returns no results, auto-fallback to all brands.
+        Returns (products, fallback_used) — fallback_used is True when the brand-scoped
+        search came back empty and the results are cross-brand.
         """
         try:
+            fallback_used = False
             query = args.get("query", "")
             brand_id = args.get("brand_id")
             price_min = args.get("price_min") or 0
             price_max = args.get("price_max") or 0
             category = args.get("category")
-            listing_type = args.get("listing_type") or None
-            if listing_type == "all":
-                listing_type = None
-            product_type = args.get("product_type") or None
 
-            # Wider pool when price/category filters will be applied post-search
+            # Wider pool when price/category filters will be applied post-search —
+            # a narrow pool makes price-band queries falsely return "nothing in range"
             has_filters = price_min > 0 or (0 < price_max < 10_000_000) or category
-            n_results = 15
+            n_results = 60 if has_filters else 15
 
             def fetch_products(product_ids: list) -> list:
                 if not product_ids:
@@ -90,10 +91,6 @@ class ProductAgent(Processor):
                 q = {"product_id": {"$in": filtered_ids}}
                 if category:
                     q["category"] = {"$regex": category, "$options": "i"}
-                if listing_type:
-                    q["listing_type"] = listing_type
-                if product_type:
-                    q["type"] = product_type
                 if price_min > 0 or (0 < price_max < 10_000_000):
                     price_filter = {}
                     if price_min > 0:
@@ -116,8 +113,6 @@ class ProductAgent(Processor):
                 query=query,
                 brand_ids=[brand_id] if brand_id else None,
                 n_results=n_results,
-                listing_type=listing_type,
-                product_type=product_type,
             )
             products = fetch_products(product_ids)
 
@@ -127,18 +122,19 @@ class ProductAgent(Processor):
                     "Brand search returned no results, falling back to all brands",
                     extra={"brand_id": brand_id, "query": query},
                 )
-                product_ids = semantic_search(query=query, brand_ids=None, n_results=n_results, listing_type=listing_type, product_type=product_type)
+                product_ids = semantic_search(query=query, brand_ids=None, n_results=n_results)
                 products = fetch_products(product_ids)
+                fallback_used = bool(products)
 
             logger.info(
                 "Search completed",
-                extra={"query": query, "brand_id": brand_id, "listing_type": listing_type, "results": [p.get("product_id") for p in products], "category": category},
+                extra={"query": query, "brand_id": brand_id, "results": [p.get("product_id") for p in products], "category": category, "fallback_used": fallback_used},
             )
-            return products
+            return products, fallback_used
 
         except Exception as e:
             logger.error("Error in handle_search", extra={"error": e})
-            return []
+            return [], False
 
     async def process(self, data: dict) -> dict:
         phone_number = data["phone_number"]
@@ -157,6 +153,9 @@ class ProductAgent(Processor):
         try:
             if "text" in data["messages"]:
                 user_query = data["messages"]["text"]["body"]
+
+                set_agent(data, "ProductAgent", model="gpt-5.2")
+
                 shown_products = user_profile.get("shown_products", [])
                 exclude_ids = [p["product_id"] for p in shown_products[-5:]] if shown_products else []
 
@@ -199,9 +198,11 @@ class ProductAgent(Processor):
                     {"role": "system", "content": f"Pending needs (items user wants but hasn't resolved yet): {pending_needs_str}"},
                     {"role": "system", "content": (
                         f"Active brand from this conversation: {requested_brand['brand_name']} (brand_id: {requested_brand['brand_id']}). "
-                        f"When the user's message doesn't mention a specific brand, search within this brand first. "
+                        f"When the user's message doesn't mention a specific brand, search within this brand first — "
+                        f"and because the user did not name it in their current message, set brand_source: 'active_context'. "
                         f"Fall back cross-brand only if this brand returns no results. "
-                        f"Override only when the user explicitly names a different brand or asks for cross-brand options."
+                        f"Override only when the user explicitly names a different brand (brand_source: 'user_named') "
+                        f"or asks for cross-brand options (brand_source: 'cross_brand', omit brand_id)."
                     ) if requested_brand else ""},
                     *build_history_turns(chat_history),
                     {"role": "user", "content": [{"type": "input_text", "text": user_query}]},
@@ -219,8 +220,9 @@ class ProductAgent(Processor):
                 category = ""
                 brand_id = ""
                 brand_name = ""
-                listing_type_searched = ""
-                product_type_searched = ""
+                brand_source = ""
+                anchor_dead_end = False  # a context-sourced (not user-named) brand scope hit the cross-brand fallback
+                dead_end_brand_id = ""
                 current_messages = messages
                 brand_search_done = False  # guard: search_brand must not consume search iterations
                 ack_sent = False
@@ -236,7 +238,7 @@ class ProductAgent(Processor):
                         text=output_schema,
                        # temperature = 0.6,
                         max_output_tokens=1200,
-                        reasoning={"effort": "low"} 
+                        reasoning={"effort": "low"}
                     )
 
                     logger.info(
@@ -270,8 +272,7 @@ class ProductAgent(Processor):
                     if tool_call.name == "search_products":
                         category = args.get("category", "")
                         brand_id = args.get("brand_id", "")
-                        listing_type_searched = args.get("listing_type", "")
-                        product_type_searched = args.get("product_type", "")
+                        brand_source = args.get("brand_source", "")
 
                     logger.info("Tool invoked", extra={"tool": tool_call.name, "arguments": args, "iteration": iteration + 1})
 
@@ -295,7 +296,9 @@ class ProductAgent(Processor):
                                     "brand_id": r.get("brand_id"),
                                     "brand_name": r.get("brand_name"),
                                     "categories_offered": r.get("categories_offered", "").split(", ") if r.get("categories_offered") else [],
-                                    "product_types": r.get("product_types", "").split(", ") if r.get("product_types") else [],
+                                    "has_ready_products": r.get("has_ready_products", False),
+                                    "has_custom_products": r.get("has_custom_products", False),
+                                    "has_services": r.get("has_services", False),
                                     "description": r.get("search_text", ""),
                                 }
                                 for r in results
@@ -307,14 +310,17 @@ class ProductAgent(Processor):
                                     "brand_name": top.get("brand_name"),
                                     "brand_description": top.get("brand_description"),
                                     "categories_offered": top.get("categories_offered", []),
-                                    "product_types": top.get("product_types", []),
-                                    "listing_types": top.get("listing_types", []),
+                                    "has_ready_products": top.get("has_ready_products", False),
+                                    "has_custom_products": top.get("has_custom_products", False),
+                                    "has_services": top.get("has_services", False),
                                     "brand_additional_context": top.get("brand_additional_context", ""),
                                 },
                                 "all_chunks": all_chunks,
                             } if top else {"found": False}
                         else:
                             brand_result = {"found": False}
+
+                        record_tool_call(data, tool="search_brand", arguments=args, output=brand_result)
 
                         current_messages = current_messages + list(response.output) + [
                             {
@@ -332,6 +338,10 @@ class ProductAgent(Processor):
                         p2 = get_product_by_id(product_id=args["product_id_2"])
                         products = [p for p in [p1, p2] if p]
                         is_comparison = True
+                        record_tool_call(
+                            data, tool="compare_products", arguments=args,
+                            output=[{"product_id": p.get("product_id"), "name": p.get("name")} for p in products],
+                        )
                         iteration += 1
                         break  # direct fetch — no need to loop
 
@@ -339,10 +349,27 @@ class ProductAgent(Processor):
                         product = get_product_by_id(product_id=args["product_id"])
                         products = [product] if product else []
                         is_reshow = True
+                        record_tool_call(
+                            data, tool="get_product_by_id", arguments=args,
+                            output={"found": bool(product), "name": product.get("name") if product else None},
+                        )
                         iteration += 1
                         break  # direct fetch — no need to loop
 
-                    products = self.handle_search(args, exclude_ids)
+                    products, fallback_used = self.handle_search(args, exclude_ids)
+                    record_tool_call(
+                        data, tool="search_products", arguments=args,
+                        output={
+                            "results_count": len(products),
+                            "products": [{"product_id": p.get("product_id"), "name": p.get("name")} for p in products],
+                            "cross_brand_fallback_used": fallback_used,
+                        },
+                    )
+                    if fallback_used and brand_source == "active_context":
+                        # The anchored/scanned brand had nothing for a request the user never
+                        # tied to it — results are cross-brand. Sticky across retry iterations.
+                        anchor_dead_end = True
+                        dead_end_brand_id = args.get("brand_id", "")
                     iteration += 1
 
                     if len(products) >= 2 or iteration >= MAX_SEARCH_ITERATIONS:
@@ -364,6 +391,18 @@ class ProductAgent(Processor):
 
                 if brand_name and brand_id:
                     user_profile["requested_brand"] = {"brand_id": brand_id, "brand_name": brand_name}
+
+                # Release the brand anchor when it dead-ended on a request the user never tied
+                # to it, or when the user's current message went brand-agnostic. A brand the
+                # user named this turn is never cleared here — its anchor stays.
+                if anchor_dead_end or brand_source == "cross_brand":
+                    record_event(
+                        data,
+                        "brand_anchor_released",
+                        reason="anchor_dead_end" if anchor_dead_end else "cross_brand_request",
+                        brand_id=dead_end_brand_id or None,
+                    )
+                    user_profile["requested_brand"] = None
 
                 if tool_call or products:
                     # Enrich with brand_name
@@ -398,18 +437,36 @@ class ProductAgent(Processor):
                             lookup = get_brand_by_id(brand_id)
                             brand_name = lookup.get("brand_name", "") if lookup else ""
 
+                    # Resolve the dead-ended context brand's name (may differ from brand_name
+                    # when the recommender dropped brand_id on a retry)
+                    dead_end_brand_name = ""
+                    if anchor_dead_end and dead_end_brand_id:
+                        if brand_name and dead_end_brand_id == brand_id:
+                            dead_end_brand_name = brand_name
+                        elif requested_brand and dead_end_brand_id == requested_brand.get("brand_id", ""):
+                            dead_end_brand_name = requested_brand.get("brand_name", "")
+                        elif brand and dead_end_brand_id == brand.get("brand_id", ""):
+                            dead_end_brand_name = qr_brand_name
+                        else:
+                            lookup = get_brand_by_id(dead_end_brand_id)
+                            dead_end_brand_name = lookup.get("brand_name", "") if lookup else ""
+
                     presenter_messages = [
                         {"role": "system", "content": f"Username: {username}"},
                         {"role": "system", "content": f"Customer's scanned brand: {qr_brand_name}"},
                         {"role": "system", "content": f"Category searched for: {category}" if category else ""},
-                        {"role": "system", "content": f"Listing type searched for: {listing_type_searched}" if listing_type_searched else "Listing type: not filtered (mixed results possible — label each result's type)"},
-                        {"role": "system", "content": f"Product type searched for: {product_type_searched}" if product_type_searched else ""},
-                        {"role": "system", "content": f"User explicitly requested brand: {brand_name}" if brand_name else ""},
+                        {"role": "system", "content": f"User explicitly requested brand: {brand_name}" if brand_name and not anchor_dead_end else ""},
                         {"role": "system", "content": (
                             f"Brand requested in this search: {brand_name} (brand_id: {brand_id}). "
                             f"Only show a product whose brand_id matches '{brand_id}' exactly. "
                             f"If none of the search results match — do not show any product. "
-                        ) if brand_id else ""},
+                        ) if brand_id and not anchor_dead_end else ""},
+                        {"role": "system", "content": (
+                            f"The active brand {dead_end_brand_name or 'the customer was browsing'} had no matching products for this request — "
+                            f"the search results are cross-brand alternatives. The customer did not ask for that brand in this message, so do not deny. "
+                            f"Show the best matching result: naturally mention that {dead_end_brand_name or 'that brand'} doesn't carry this, "
+                            f"then present the alternative under its own brand name."
+                        ) if anchor_dead_end else ""},
                         {"role": "system", "content": f"Search results: {json.dumps(_trim_for_presenter(products))}"},
                         {"role": "system", "content": f"Important: Last Shown Product: {user_profile.get('last_shown_product', '')}"},
                         {"role": "system", "content": shown_summary},
@@ -427,7 +484,7 @@ class ProductAgent(Processor):
                         # temperature=1,
                         text=presenter_output_schema,
                         max_output_tokens=1000,
-                        reasoning={"effort": "low"} 
+                        reasoning={"effort": "low"}
                     )
 
                     logger.info(
@@ -441,6 +498,18 @@ class ProductAgent(Processor):
                         if item.type == "message"
                     )
                     presenter_output = json.loads(presenter_output_text)
+
+                    record_event(
+                        data,
+                        "presenter_output",
+                        product_id=presenter_output.get("product_id"),
+                        product_ids=presenter_output.get("product_ids"),
+                        add_needs=presenter_output.get("add_needs"),
+                        remove_needs=presenter_output.get("remove_needs"),
+                        is_new_topic=is_new_topic,
+                        is_reshow=is_reshow,
+                        is_comparison=is_comparison,
+                    )
 
                     _apply_needs_update(user_profile, presenter_output)
 
@@ -505,6 +574,13 @@ class ProductAgent(Processor):
                             shown_brand_id = product.get("brand_id", "")
                             active_brand_id = scanned_brand_id or requested_brand_id
                             if active_brand_id and shown_brand_id and shown_brand_id != active_brand_id:
+                                record_event(
+                                    data,
+                                    "brand_anchor_released",
+                                    reason="different_brand_shown",
+                                    brand_id=active_brand_id,
+                                    shown_brand_id=shown_brand_id,
+                                )
                                 if scanned_brand_id:
                                     user_profile["past_brand"] = scanned_brand_id
                                     user_profile["current_brand"] = ""
@@ -526,9 +602,7 @@ class ProductAgent(Processor):
                             user_profile["pending_needs"] = remaining
                             user_profile["resolved_needs"] = resolved
 
-                            _listing_type = product.get("listing_type", "product")
-                            _product_type = product.get("type", "ready_product")
-                            has_price = bool(product.get("price_inr")) and _listing_type == "product" and _product_type == "ready_product"
+                            has_price = bool(product.get("price_inr"))
                             cta_title = "Buy" if has_price else "Enquire Now"
                             caption = "Tap to purchase this product." if has_price else "Tap to enquire about pricing and availability."
                             bot_response.append(

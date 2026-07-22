@@ -124,7 +124,7 @@ def update_product(product_id: str, update_data: dict) -> dict | None:
                 if key:
                     delete_media(key)
 
-        _embedding_fields = {"name", "category", "type", "listing_type", "description", "style_tags", "materials", "ideal_for", "colors_available", "deliverables"}
+        _embedding_fields = {"name", "category", "type", "listing_type", "description", "size", "style_tags", "materials", "ideal_for", "colors_available", "deliverables"}
         if update_data.keys() & _embedding_fields:
             update_product_embedding(result)
 
@@ -211,6 +211,6 @@ def get_catalog_metadata(brand_id: str = None) -> dict:
             "ideal_for": all_ideal_for,
             "listing_types": all_listing_types,
         }
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to fetch catalog metadata.")
         return {"categories": [], "style_tags": [], "ideal_for": []}
