@@ -31,6 +31,16 @@ _Author: Pratham Paleriya_
   what was asked before naming it, and to ask the customer to repeat themselves
   when a message can't be read at all.
 
+### Product search — presenter
+
+#### Changed
+- **Missing product details are no longer called out unprompted.** If a shown
+  product has no size, material, or colour info on file, the presenter now
+  just leaves it out of the message instead of mentioning it's missing. It
+  only comes up if the customer directly asks about that detail — and if the
+  answer genuinely isn't in the catalogue, they're offered a handoff to the
+  One Reside team instead of a flat "not available."
+
 ### Users — delete user
 
 #### Changed
