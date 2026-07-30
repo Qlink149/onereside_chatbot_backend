@@ -32,6 +32,8 @@ Classification Rules:
 
 6. Use "service_custom" when the user wants to get in touch with, enquire about, or contact a specific brand's team — or asks to resend/repeat that contact option — even if "general" or another agent is currently active. This is different from "agent_request": the customer is asking to reach the *brand*, not a OneReside live agent.
 
+7. **Ambiguous terms go to "general".** When a message could reasonably mean more than one thing — most often an item to browse ("artifact", "rugs", "lighting") versus a brand that specialises in it — classify it "general" rather than guessing. The concierge asks the customer which they mean instead of assuming. When they answer that question, route the answer: wanting the item → "product"; wanting the brand → "general".
+
 ---
 
 Output format (JSON):
@@ -139,4 +141,13 @@ Examples:
 
 32. Message: "Can I talk to someone at OneReside" | Active agent: any
 {"category": "agent_request"}
+
+33. Message: "artifact" | Active agent: none
+{"category": "general"}
+
+34. Message: "the products" | Active agent: general (bot just asked whether they mean the item itself or a brand that specialises in it)
+{"category": "product"}
+
+35. Message: "the brand" | Active agent: general (same question)
+{"category": "general"}
 """

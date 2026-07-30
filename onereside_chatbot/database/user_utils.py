@@ -5,7 +5,7 @@ from pymongo import ReturnDocument
 
 from onereside_chatbot.constants import CHAT_HISTORY_MAX
 from onereside_chatbot.database.collections import idac
-from onereside_chatbot.database.message_utils import save_turn_messages
+from onereside_chatbot.database.message_utils import delete_messages_by_phone, save_turn_messages
 from onereside_chatbot.utils.format_chathistory import format_chat_history
 from onereside_chatbot.utils.logger_config import logger
 
@@ -137,14 +137,44 @@ def get_user_by_object_id(user_id: ObjectId):
         raise e
 
 def delete_user_profile(user_id: ObjectId) -> dict | None:
-    """Delete a user's profile document only (orders/payments are untouched). Returns the deleted doc, or None if not found."""
+    """Delete a user and their whole conversation history.
+
+    Removes the profile doc (including the embedded ``chat_history``) and every
+    per-message doc in ``messages``. Orders, enquiries and payments are business
+    records and are deliberately kept.
+
+    Messages are removed before the profile itself, so a mid-way failure leaves
+    the user visible in the dashboard and the delete can be retried.
+
+    Returns the deleted profile doc, or None if not found.
+    """
     try:
-        deleted = idac.find_one_and_delete({"_id": user_id})
-        if not deleted:
+        user = idac.find_one({"_id": user_id})
+        if not user:
             logger.warning("No user found to delete.", extra={"user_id": str(user_id)})
             return None
-        logger.info("User profile deleted successfully.", extra={"user_id": str(user_id)})
-        return deleted
+
+        phone_number = user.get("phone_number")
+        message_count = 0
+        if phone_number:
+            message_count = delete_messages_by_phone(phone_number)
+        else:
+            logger.warning(
+                "User has no phone number; skipping message cleanup.",
+                extra={"user_id": str(user_id)},
+            )
+
+        idac.delete_one({"_id": user_id})
+        logger.info(
+            "User deleted successfully.",
+            extra={
+                "user_id": str(user_id),
+                "phone_number": phone_number,
+                "messages_deleted": message_count,
+            },
+        )
+        user["_deleted_counts"] = {"messages": message_count}
+        return user
     except Exception:
         logger.exception("Exception occurred while deleting user profile.", extra={"user_id": str(user_id)})
         raise

@@ -9,6 +9,15 @@ from onereside_chatbot.utils.logger_config import logger
 from onereside_chatbot.utils.trace import record_tool_call, set_agent
 
 
+# Reasoning model — matches the config the product/service agents already run on.
+# Reasoning tokens are billed against `max_output_tokens`, so the ceiling has to
+# be well above the visible reply length or the model spends the whole budget
+# thinking and returns no message at all.
+MODEL = "gpt-5-mini"
+REASONING = {"effort": "low"}
+MAX_OUTPUT_TOKENS = 3000
+
+
 class OneResideAgent(Processor):
     """One Reside platform concierge — handles platform questions and brand discovery."""
 
@@ -50,7 +59,7 @@ class OneResideAgent(Processor):
 
             user_query = data["messages"]["text"]["body"]
 
-            set_agent(data, "OneResideAgent", model="gpt-4.1-mini")
+            set_agent(data, "OneResideAgent", model=MODEL)
 
             chat_history = user_profile.get("chat_history", [])[-10:]
             chat_history_str = "\n".join(
@@ -66,13 +75,14 @@ class OneResideAgent(Processor):
 
             # Agent loop — handles optional tool call
             response = await openai_client.responses.create(
-                model="gpt-4.1-mini",
+                model=MODEL,
                 instructions=one_reside_agent_prompt,
                 input=messages,
                 tools=[search_brands_tool, list_all_brands_tool],
                 tool_choice="auto",
                 text=output_schema,
-                max_output_tokens=400,
+                max_output_tokens=MAX_OUTPUT_TOKENS,
+                reasoning=REASONING,
             )
 
             logger.info("OneReside agent response", extra={"response": response.model_dump(), "phone_number": phone_number})
@@ -99,17 +109,30 @@ class OneResideAgent(Processor):
                 follow_up_messages = messages + list(response.output) + tool_outputs
 
                 response = await openai_client.responses.create(
-                    model="gpt-4.1-mini",
+                    model=MODEL,
                     instructions=one_reside_agent_prompt,
                     input=follow_up_messages,
                     text=output_schema,
-                    max_output_tokens=1000,
+                    max_output_tokens=MAX_OUTPUT_TOKENS,
+                    reasoning=REASONING,
                 )
 
                 logger.info("OneReside agent follow-up response", extra={"response": response.model_dump(), "phone_number": phone_number})
 
-            output_text = response.output[0].content[0].text
-            output = json.loads(output_text)
+            # A reasoning model puts a `reasoning` item first, so the message has to
+            # be selected by type — output[0] is not the reply.
+            text_message = next((item for item in response.output if item.type == "message"), None)
+
+            if not text_message:
+                logger.warning(
+                    "OneResideAgent produced no message — only reasoning or empty output",
+                    extra={"phone_number": phone_number},
+                )
+                data["bot_response"] = [{"type": "text", "text": "Give me a moment, let me look into that for you."}]
+                user_profile["service_selected"] = ""
+                return data
+
+            output = json.loads(text_message.content[0].text)
 
             data["bot_response"] = [{"type": "text", "text": output.get("message", "")}]
             user_profile["service_selected"] = ""

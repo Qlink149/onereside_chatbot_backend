@@ -110,6 +110,23 @@ def save_single_message(
         )
 
 
+def delete_messages_by_phone(phone_number: str) -> int:
+    """Delete every message doc for a phone number. Returns the number deleted."""
+    try:
+        result = messages.delete_many({"phone_number": phone_number})
+        logger.info(
+            "Messages deleted",
+            extra={"phone_number": phone_number, "count": result.deleted_count},
+        )
+        return result.deleted_count
+    except Exception as e:
+        logger.exception(
+            "Failed to delete messages",
+            extra={"phone_number": phone_number, "exception": e},
+        )
+        raise e
+
+
 def get_messages_page(phone_number: str, skip: int = 0, limit: int = 50) -> tuple[int, list]:
     """Paginated message docs for a user, newest first. Returns (total, docs)."""
     try:

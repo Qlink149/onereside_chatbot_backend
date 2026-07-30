@@ -55,7 +55,10 @@ def get_user_by_id(user_id: str, _: str = Depends(verify_api_key)):
 
 @router.delete("/{user_id}", status_code=204)
 def delete_user(user_id: str, _: str = Depends(verify_api_key)):
-    """Delete a user's profile document only. Orders/payments made by the user are left intact."""
+    """Delete a user and their whole conversation history.
+
+    Orders, enquiries and payments are business records and are left intact.
+    """
     try:
         oid = ObjectId(user_id)
     except InvalidId:
@@ -65,9 +68,14 @@ def delete_user(user_id: str, _: str = Depends(verify_api_key)):
     if not deleted:
         raise HTTPException(status_code=404, detail="User not found")
 
+    counts = deleted.get("_deleted_counts", {})
     log_admin_action(
         action="delete_user",
         target_type="user",
         target_id=user_id,
-        details={"phone_number": deleted.get("phone_number"), "username": deleted.get("username")},
+        details={
+            "phone_number": deleted.get("phone_number"),
+            "username": deleted.get("username"),
+            "messages_deleted": counts.get("messages", 0),
+        },
     )
