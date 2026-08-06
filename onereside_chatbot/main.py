@@ -2,14 +2,15 @@
 import hashlib
 import hmac
 import json
+import time
+from datetime import datetime, timezone
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from pymongo.errors import DuplicateKeyError
 
-import time
-
-from onereside_chatbot.database.collections import idac
+from onereside_chatbot.database.collections import idac, orders, webhook_idempotency
 from onereside_chatbot.database.conversation_utils import save_user_message_only
 from onereside_chatbot.database.db_utils import (
     save_to_mongo,
@@ -18,7 +19,7 @@ from onereside_chatbot.database.db_utils import (
 )
 from onereside_chatbot.utils.format_chathistory import format_assistant, format_user
 from onereside_chatbot.utils.pubsub import PubSubManager
-from onereside_chatbot.utils.env_load import razorpay_webhook_secrete
+from onereside_chatbot.utils.env_load import razorpay_webhook_secrete, web_allowed_origins
 from onereside_chatbot.constants import SUPPORT_NOTIFY_NUMBERS
 from onereside_chatbot.whatsapp_functions.mark_message_read import mark_message_read
 from onereside_chatbot.whatsapp_functions.template.send_user_order_payment_failed import (
@@ -43,6 +44,10 @@ from onereside_chatbot.processors.response_manager import ResponseManager
 from onereside_chatbot.utils.logger_config import logger
 from onereside_chatbot.utils.trace import record_event
 from onereside_chatbot.routes.systems import router as systems_router
+from onereside_chatbot.web_channel.routes import router as web_router
+from onereside_chatbot.channels.registry import get_sender
+from onereside_chatbot.orchestration.turn import Turn
+from onereside_chatbot.orchestration.run_turn import run_turn
 
 app = FastAPI(
     title="Athams OneReside Server",
@@ -53,23 +58,26 @@ app = FastAPI(
 )
 
 
-ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://localhost:3000",
-    "https://dash.onereside.claraai.tech",
-    "https://onereside-dashboard.vercel.app"
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=web_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
+@app.middleware("http")
+async def web_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/web"):
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+    return response
+
+
 app.include_router(systems_router, prefix="")
+app.include_router(web_router, tags=["web"])
 
 
 @app.post("/razorpay/webhook")
@@ -98,8 +106,29 @@ async def razorpay_webhook(request: Request):
     PAYMENT_LINK_EVENTS = {"payment_link.paid", "payment_link.cancelled", "payment_link.expired", "payment.failed"}
 
     if event in PAYMENT_LINK_EVENTS:
-        payment_link_entity = rz_payload.get("payment_link", {}).get("entity", {})
+        payment_link_entity = rz_payload.get("payment_link", {}).get("entity") or {}
+        # payment.failed often omits payment_link — ack 200 so Razorpay does not retry forever
+        if event == "payment.failed" and not payment_link_entity.get("id"):
+            logger.info(
+                "payment.failed without payment_link entity — ack only",
+                extra={"event": event},
+            )
+            return {"status": "ok"}
+
         payment_link_id = payment_link_entity.get("id")
+        payment_id = rz_payload.get("payment", {}).get("entity", {}).get("id") or ""
+        idem_key = f"{payment_link_id}:{event}:{payment_id}"
+        # Skip duplicates; reclaim key if a pending order still needs this event (re-seeded fixtures).
+        if webhook_idempotency.find_one({"_id": idem_key}):
+            if not orders.find_one({"payment_link_id": payment_link_id, "payment_status": "pending"}):
+                return {"status": "ok"}
+            webhook_idempotency.delete_one({"_id": idem_key})
+        try:
+            webhook_idempotency.insert_one(
+                {"_id": idem_key, "created_at": datetime.now(timezone.utc)}
+            )
+        except DuplicateKeyError:
+            return {"status": "ok"}
 
         # Base update — applies to all payment link events
         order_update = {
@@ -179,8 +208,6 @@ def ping():
     return {"message": "OneReside Chatbot Server is up and running"}
 
 
-
-
 async def publish_turn_events(data: dict) -> None:
     """Push the just-handled turn to any dashboard streaming this conversation.
 
@@ -245,144 +272,31 @@ async def publish_turn_events(data: dict) -> None:
 
 async def process_message(request_data: dict):
     """Process the incoming message in the background."""
-    phone_number = None
-    response_manager = ResponseManager()
+    whatsapp_event = request_data["entry"][0]["changes"][0]["value"]
 
-    try:
-        whatsapp_event = request_data["entry"][0]["changes"][0]["value"]
+    messages = whatsapp_event["messages"][0]
+    phone_number = messages["from"]
 
-        messages = whatsapp_event["messages"][0]
-        phone_number = messages["from"]
+    if "id" in messages:
+        mark_message_read(messages["id"])
 
-        if "id" in messages:
-            mark_message_read(messages["id"])
+    whatsapp_username = (
+        request_data["entry"][0]["changes"][0]["value"]["contacts"][0][
+            "profile"
+        ]["name"]
+        if "contacts" in request_data["entry"][0]["changes"][0]["value"]
+        else ""
+    )
 
-        whatsapp_username = (
-            request_data["entry"][0]["changes"][0]["value"]["contacts"][0][
-                "profile"
-            ]["name"]
-            if "contacts" in request_data["entry"][0]["changes"][0]["value"]
-            else ""
-        )
-
-        data = {
-            "phone_number": phone_number,
-            "messages": messages,
-            "whatsapp_username": whatsapp_username,
-            "received_at": int(time.time()),
-        }
-        logger.info(
-            "Data object to pipeline",
-            extra={"data": data, "phone_number": phone_number},
-        )
-
-        # Human takeover check — read directly from DB before any pipeline runs.
-        # Wrapped in its own try/except so any failure here never triggers the
-        # outer except block (which would send a bot error message to the user).
-        raw_profile = idac.find_one({"phone_number": phone_number}, {"human_takeover": 1})
-        if raw_profile and raw_profile.get("human_takeover", {}).get("active"):
-            try:
-                save_user_message_only(
-                    phone_number=phone_number,
-                    user_message=messages,
-                    whatsapp_username=whatsapp_username,
-                    received_at=data["received_at"],
-                )
-                pubsub = PubSubManager()
-                await pubsub.publish(
-                    phone_number,
-                    {
-                        "type": "user_message",
-                        "phone_number": phone_number,
-                        "content": format_user(user_message=messages, phone_number=phone_number),
-                        "whatsapp_username": whatsapp_username,
-                        "timestamp": int(time.time()),
-                    },
-                )
-            except Exception as e:
-                logger.exception(
-                    "Error handling message during human takeover",
-                    extra={"exception": e, "phone_number": phone_number},
-                )
-            logger.info("Human takeover active — bot suppressed", extra={"phone_number": phone_number})
-            return
-
-        pipeline = InitialPipeline()
-        data = await pipeline.run(data=data)
-
-        if "bot_response" in data:
-            logger.info(
-                "Bot response",
-                extra={
-                    "bot_response": data["bot_response"],
-                    "phone_number": phone_number,
-                },
-            )
-
-            save_to_mongo(data=data)
-            response_manager.handle_responses(data=data)
-            await publish_turn_events(data)
-
-        else:
-            logger.info(
-                "Going to service selected pipeline",
-                extra={
-                    "phone_number": phone_number,
-                    "service_selected": data["user_profile"][
-                        "service_selected"
-                    ],
-                },
-            )
-            user_profile = data["user_profile"]
-
-            if user_profile["service_selected"] == ServiceList.GENERAL.value:
-                # No brand scanned — route to One Reside agent instead of brand-specific general agent
-                pipeline = OneResidePipeline() if not data.get("brand") else GeneralPipeline()
-
-            elif (
-                user_profile["service_selected"]
-                == ServiceList.PRODUCT_SEARCH.value
-            ):
-                pipeline = ProductSearchPipeline()
-
-            elif (
-                user_profile["service_selected"]
-                == ServiceList.ONE_RESIDE.value
-            ):
-                pipeline = OneResidePipeline()
-
-            elif (
-                user_profile["service_selected"]
-                == ServiceList.PRODUCT_CHECKOUT.value
-            ):
-                pipeline = ProductCheckoutPipeline()
-
-            elif (
-                user_profile["service_selected"]
-                == ServiceList.SERVICE_CUSTOM.value
-            ):
-                pipeline = ServiceCustomPipeline()
-
-            data = await pipeline.run(data=data)
-            save_to_mongo(data=data)
-            response_manager.handle_responses(data=data)
-            await publish_turn_events(data)
-
-    except Exception as e:
-        logger.exception(
-            "Exception occured while running message endpoint",
-            extra={"exception": e, "phone_number": phone_number},
-        )
-        record_event(data, "pipeline_error", error=f"{type(e).__name__}: {e}")
-        data["bot_response"] = [
-            {
-                "type": "text",
-                "text": "Unexpected error occured.",
-            }
-        ]
-        save_to_mongo(data=data)
-        response_manager.handle_responses(data=data)
-        await publish_turn_events(data)
+    turn = Turn(
+        channel="whatsapp",
+        user_ref=phone_number,
+        session_id=None,
+        messages=messages,
+        display_name=whatsapp_username,
+        received_at=int(time.time()),
+    )
+    await run_turn(turn)
 
 
 @app.post("/gupshup/message/onereside")

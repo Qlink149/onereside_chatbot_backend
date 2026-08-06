@@ -111,13 +111,44 @@ def get_user_profile(phone_number: str):
         raise e
 
 
-def get_all_users(skip: int = 0, limit: int = 20) -> tuple[int, list]:
-    """Get paginated list of all users. Returns (total, users)."""
+def get_all_users(skip: int = 0, limit: int = 20, channel: str | None = None) -> tuple[int, list]:
+    """Get paginated list of all users. Returns (total, users).
+
+    channel=web      -> only web widget sessions
+    channel=whatsapp or omitted -> exclude web (existing WhatsApp docs have no channel field)
+    """
     try:
-        total = idac.count_documents({})
-        projection = {"phone_number": 1, "username": 1, "updated_at": 1, "agent_request": 1}
-        users = list(idac.find({}, projection).sort("updated_at", -1).skip(skip).limit(limit))
-        logger.info("Fetched users", extra={"skip": skip, "limit": limit, "total": total})
+        if channel == "web":
+            query = {"channel": "web"}
+        else:
+            # $ne so legacy WhatsApp docs without a channel field are included
+            query = {"channel": {"$ne": "web"}}
+        total = idac.count_documents(query)
+        projection = {
+            "phone_number": 1,
+            "username": 1,
+            "updated_at": 1,
+            "agent_request": 1,
+            "identifiers": 1,
+            "channel": 1,
+        }
+        users = list(idac.find(query, projection).sort("updated_at", -1).skip(skip).limit(limit))
+        for user in users:
+            phone = user.get("phone_number") or ""
+            is_web = phone.startswith("web:") or user.get("channel") == "web"
+            user["channel"] = "web" if is_web else "whatsapp"
+            identified = (user.get("identifiers") or {}).get("phone")
+            user["identified_phone"] = identified if identified else None
+            also_on_whatsapp = False
+            if identified:
+                also_on_whatsapp = bool(
+                    idac.find_one(
+                        {"phone_number": identified, "channel": {"$exists": False}},
+                        {"_id": 1},
+                    )
+                )
+            user["also_on_whatsapp"] = also_on_whatsapp
+        logger.info("Fetched users", extra={"skip": skip, "limit": limit, "total": total, "channel": channel})
         return total, users
     except Exception as e:
         logger.exception("Exception occurred while fetching all users.")
@@ -203,3 +234,11 @@ def update_agent_request_flag(user_id: ObjectId):
             extra={"user_id": str(user_id)}
         )
         raise
+
+
+def set_agent_request(phone_number: str, active: bool) -> None:
+    """Set agent_request on the user profile immediately (e.g. before slow side effects)."""
+    idac.update_one(
+        {"phone_number": phone_number},
+        {"$set": {"agent_request": active, "updated_at": int(time.time())}},
+    )

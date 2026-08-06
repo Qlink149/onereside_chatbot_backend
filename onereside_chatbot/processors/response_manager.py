@@ -1,3 +1,4 @@
+from onereside_chatbot.channels.registry import get_sender
 from onereside_chatbot.whatsapp_functions.cta.send_cta import send_cta_url
 from onereside_chatbot.whatsapp_functions.flow.send_site_visit import (
     send_site_visit_flow,
@@ -71,14 +72,16 @@ class ResponseManager:
 
     def handle_responses(self, data):
         """Iterate through the list of bot responses and routes to its appropriate handler."""
+        sender = get_sender(data["phone_number"])
+        sender.send_status("done", "")
         bot_responses = data.get("bot_response", [])
         phone_number = data["phone_number"]
         for response in bot_responses:
             response_type = response.get("type")
-            handler = self._handlers.get(response_type)
+            method = getattr(sender, f"send_{response_type}", None)
 
-            if handler:
-                result = handler(phone_number=phone_number, bot_response=response)
+            if method:
+                result = method(phone_number=phone_number, bot_response=response)
                 if result:
                     if result.get("status") != "submitted":
                         logger.warning(f"Message not confirmed: {result}")

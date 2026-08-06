@@ -15,7 +15,7 @@ from onereside_chatbot.database.collections import product as pd
 from onereside_chatbot.database.chroma.utils import semantic_search, semantic_brand_search
 from onereside_chatbot.database.brand_utils import get_brand_by_id
 from onereside_chatbot.database.db_utils import get_product_by_id, get_brands_by_ids, get_catalog_metadata
-from onereside_chatbot.whatsapp_functions.send_text_message import send_text_message
+from onereside_chatbot.channels.registry import get_sender
 from onereside_chatbot.utils.trace import record_event, record_tool_call, set_agent
 from onereside_chatbot.constants import ACK_MESSAGES
 
@@ -228,6 +228,10 @@ class ProductAgent(Processor):
                 ack_sent = False
 
                 while iteration < MAX_SEARCH_ITERATIONS:
+                    get_sender(data["phone_number"]).send_status(
+                        "searching",
+                        f"iteration {iteration + 1} of {MAX_SEARCH_ITERATIONS}",
+                    )
                     response = await openai_client.responses.create(
                         model="gpt-5.2",
                         instructions=product_recommender_prompt,
@@ -264,7 +268,7 @@ class ProductAgent(Processor):
 
                     # Ack once per user message — guard against double-send when search_brand precedes search_products
                     if not ack_sent:
-                        send_text_message(phone_number, {"type": "text", "text": random.choice(ACK_MESSAGES)})
+                        get_sender(data["phone_number"]).send_text(phone_number, {"type": "text", "text": random.choice(ACK_MESSAGES)})
                         ack_sent = True
 
                     args = json.loads(tool_call.arguments)
@@ -477,6 +481,7 @@ class ProductAgent(Processor):
                         {"role": "user", "content": [{"type": "input_text", "text": user_query}]},
                     ]
 
+                    get_sender(data["phone_number"]).send_status("presenting", "")
                     presenter_response = await openai_client.responses.create(
                         model="gpt-5.2",
                         instructions=product_presenter_prompt,

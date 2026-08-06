@@ -1,5 +1,6 @@
 import json
 import random
+import asyncio
 from zoneinfo import ZoneInfo
 
 from onereside_chatbot.models.service_list import ServiceList
@@ -8,10 +9,13 @@ from onereside_chatbot.prompt.classifier import (
     one_reside_classifier,
 )
 from onereside_chatbot.constants import UNSUPPORTED_TYPE_RESPONSES, AGENT_REQUEST_RESPONSES, SUPPORT_NOTIFY_NUMBERS
+from onereside_chatbot.database.user_utils import set_agent_request
 from onereside_chatbot.whatsapp_functions.template.send_customer_support_template import send_customer_support_template
 from onereside_chatbot.utils.get_openai_responses import get_openai_responses
 from onereside_chatbot.utils.logger_config import logger
+from onereside_chatbot.utils.pubsub import PubSubManager
 from onereside_chatbot.utils.trace import record_classifier, record_event
+from onereside_chatbot.channels.registry import get_sender
 
 india_tz = ZoneInfo('Asia/Kolkata')
 
@@ -54,16 +58,19 @@ class Classifier(Processor):
                     if button_title == "Buy":
                         record_event(data, "classifier_shortcut", rule="button_reply", button=button_title, routed_to=ServiceList.PRODUCT_CHECKOUT.value)
                         user_profile["service_selected"] = ServiceList.PRODUCT_CHECKOUT.value
+                        get_sender(phone_number).send_status("classified", "Buy")
                         return data
                     if button_title == "Enquire Now":
                         record_event(data, "classifier_shortcut", rule="button_reply", button=button_title, routed_to=ServiceList.PRODUCT_CHECKOUT.value)
                         user_profile["service_selected"] = ServiceList.PRODUCT_CHECKOUT.value
+                        get_sender(phone_number).send_status("classified", "Enquire Now")
                         return data
 
                 if "nfm_reply" in interactive:
                     if interactive["nfm_reply"]["name"] == "flow":
                         record_event(data, "classifier_shortcut", rule="flow_reply", routed_to=ServiceList.PRODUCT_CHECKOUT.value)
                         user_profile["service_selected"] = ServiceList.PRODUCT_CHECKOUT.value
+                        get_sender(phone_number).send_status("classified", "flow_reply")
                         return data
 
             elif "text" in data["messages"]:
@@ -136,6 +143,8 @@ class Classifier(Processor):
                     },
                 )
 
+                get_sender(phone_number).send_status("classified", category)
+
                 if category == "general":
                     user_profile["service_selected"] = ServiceList.GENERAL.value
                     return data
@@ -155,6 +164,19 @@ class Classifier(Processor):
                 if category == "agent_request":
                     record_event(data, "agent_request_raised")
                     user_profile["agent_request"] = True
+                    # Persist before Gupshup support templates — they can take 30s+ each
+                    set_agent_request(phone_number, True)
+                    # Live badge for dashboard SSE (10s list poll remains as fallback)
+                    channel = "web" if phone_number.startswith("web:") else "whatsapp"
+                    pubsub = PubSubManager()
+                    event = {
+                        "type": "agent_request",
+                        "user_ref": phone_number,
+                        "channel": channel,
+                        "active": True,
+                    }
+                    for queue in pubsub._subscribers.get(phone_number, []):
+                        queue.put_nowait(event)
                     data["bot_response"] = [
                         {
                             "type": "text",
@@ -163,7 +185,8 @@ class Classifier(Processor):
                     ]
                     for notify_number in SUPPORT_NOTIFY_NUMBERS:
                         try:
-                            send_customer_support_template(
+                            await asyncio.to_thread(
+                                send_customer_support_template,
                                 phone_number=notify_number,
                                 customer_name=user_profile.get("username", phone_number),
                                 customer_phone=phone_number,

@@ -17,6 +17,15 @@ def _create_token() -> str:
     return jwt.encode({"sub": "admin", "exp": expire}, jwt_secret, algorithm=ALGORITHM)
 
 
+def create_web_token(user_ref: str, bound_origin: str | None = None) -> str:
+    """Mint a JWT for a web-channel session (sub=user_ref, channel=web)."""
+    expire = datetime.now(timezone.utc) + timedelta(minutes=JWT_EXPIRE_MINUTES)
+    payload: dict = {"sub": user_ref, "channel": "web", "exp": expire}
+    if bound_origin:
+        payload["origin"] = bound_origin.rstrip("/")
+    return jwt.encode(payload, jwt_secret, algorithm=ALGORITHM)
+
+
 class LoginRequest(BaseModel):
     username: str
     password: str

@@ -19,6 +19,9 @@ orders.create_index("order_id", unique=True, sparse=True)
 refunds = db["refunds"]
 enquiries = db["enquiries"]
 
+webhook_idempotency = db["webhook_idempotency"]
+webhook_idempotency.create_index("created_at", expireAfterSeconds=86400)
+
 messages = db["messages"]
 messages.create_index([("phone_number", 1), ("timestamp", -1)])
 

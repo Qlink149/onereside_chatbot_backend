@@ -2,6 +2,9 @@
 .DS_Store
 Thumbs.db
 
+# Test-data cleanup backups (may contain PII)
+backups/
+
 # Logs and temp files
 *.log
 *.tmp
@@ -100,9 +103,14 @@ build/
 
 # Environment variables
 .env
+.env.*
+!example.env
 .env.local
 .env.*.local
 .envrc
+
+# Pytest
+.pytest_cache/
 
 # Coverage files
 coverage/
@@ -137,4 +145,8 @@ postman.json
 #Ignore vscode AI rules
 .github\instructions\codacy.instructions.md
 
-*standards
+docs/
+scripts/
+.cursorrules
+# Characterisation bot_response dumps (copied into widget fixtures)
+tests/characterisation/dumps/

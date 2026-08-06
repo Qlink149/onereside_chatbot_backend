@@ -1,6 +1,6 @@
 from pymongo import MongoClient
 
-from onereside_chatbot.utils.env_load import mongo_uri
+from onereside_chatbot.utils.env_load import mongo_prod_db_name, mongo_uri
 
 client = MongoClient(mongo_uri)
-db = client["OneReside"]
+db = client[mongo_prod_db_name]

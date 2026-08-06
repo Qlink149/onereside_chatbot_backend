@@ -5,9 +5,12 @@ from onereside_chatbot.processors.abstract_processor import Processor
 from onereside_chatbot.utils.logger_config import logger
 from onereside_chatbot.database.db_utils import get_product_by_id, save_order, save_enquiry
 from onereside_chatbot.database.brand_utils import get_brand_by_id
+from onereside_chatbot.database.order_utils import _generate_order_id
 from onereside_chatbot.utils.razorpay_utils import create_payment_link
 from onereside_chatbot.models.enums import FLowId
-from onereside_chatbot.constants import SUPPORT_NOTIFY_NUMBERS, BRAND_ENQUIRY_RESPONSES
+from onereside_chatbot.models.service_list import ServiceList
+from onereside_chatbot.constants import SUPPORT_NOTIFY_NUMBERS, BRAND_ENQUIRY_RESPONSES, RAZORPAY_REDIRECT
+from onereside_chatbot.utils.env_load import web_success_url
 from onereside_chatbot.utils.trace import record_event, set_agent
 from onereside_chatbot.whatsapp_functions.template.send_product_enquiry_template import send_product_enquiry_template
 
@@ -83,6 +86,20 @@ class ProductCheckoutAgent(Processor):
                     payload = json.loads(button_details.get("id"))
                     msgid = payload.get("msgid")
                     button_title = button_details.get("title")
+
+                    if msgid == "show_similar_oos":
+                        user_profile["service_selected"] = ServiceList.PRODUCT_SEARCH.value
+                        user_profile["selected_product_id"] = {}
+                        data["bot_response"] = [
+                            {
+                                "type": "text",
+                                "text": (
+                                    "What are you looking for? Tell me the style, room, "
+                                    "or piece and I'll find similar options."
+                                ),
+                            }
+                        ]
+                        return data
 
                     if msgid.startswith("enquire"):
                         brand_id = msgid.split("$")[1]
@@ -207,50 +224,88 @@ class ProductCheckoutAgent(Processor):
                             ]
 
                     elif msgid == "address_confirmation":
-                        selected_prod = user_profile.get("selected_product_id")
+                        selected_prod = user_profile.get("selected_product_id") or {}
 
                         if button_title == "Continue":
-                            amount_inr = selected_prod.get("price_inr", 0)
-                            amount_paise = int(amount_inr * 100)
+                            # Live stock check — block only exact out_of_stock; absent field proceeds
+                            prod_id = selected_prod.get("product_id")
+                            fresh = get_product_by_id(product_id=prod_id) if prod_id else None
+                            if (
+                                fresh
+                                and str(fresh.get("inventory_status") or "").strip()
+                                == "out_of_stock"
+                            ):
+                                record_event(
+                                    data,
+                                    "checkout_blocked_out_of_stock",
+                                    product_id=prod_id,
+                                )
+                                data["bot_response"] = [
+                                    {
+                                        "type": "quickreply",
+                                        "text": (
+                                            "That piece is no longer available — "
+                                            "it's just been snapped up."
+                                        ),
+                                        "caption": "Want me to find similar options?",
+                                        "options": [{"title": "Show similar"}],
+                                        "msgid": "show_similar_oos",
+                                    }
+                                ]
+                                user_profile["service_selected"] = ""
+                                user_profile["selected_product_id"] = {}
+                            else:
+                                amount_inr = selected_prod.get("price_inr", 0)
+                                amount_paise = int(amount_inr * 100)
 
-                            payment_link_response = create_payment_link(
-                                amount=amount_paise,
-                                phone=phone_number,
-                                name=username,
-                                description=f"Order for {selected_prod.get('name', '')}",
-                            )
+                                order_id = _generate_order_id()
+                                callback_url = (
+                                    f"{web_success_url.rstrip('/')}/order/{order_id}"
+                                    if data.get("channel") == "web"
+                                    else RAZORPAY_REDIRECT
+                                )
 
-                            record_event(
-                                data, "payment_link_created",
-                                product_id=selected_prod.get("product_id"),
-                                amount_inr=amount_inr,
-                                payment_link_id=payment_link_response.get("id"),
-                            )
+                                payment_link_response = create_payment_link(
+                                    amount=amount_paise,
+                                    phone=phone_number,
+                                    name=username,
+                                    description=f"Order for {selected_prod.get('name', '')}",
+                                    callback_url=callback_url,
+                                )
 
-                            order_doc = {
-                                "phone_number": phone_number,
-                                "username": username,
-                                "product": selected_prod,
-                                "address": user_profile.get("address"),
-                                "amount_inr": amount_inr,
-                                "amount_paise": amount_paise,
-                                "payment_link_id": payment_link_response.get("id"),
-                                "payment_short_url": payment_link_response.get("short_url"),
-                                "razorpay_payment_id": None,
-                                "payment_status": "pending",
-                            }
-                            save_order(order_doc)
+                                record_event(
+                                    data, "payment_link_created",
+                                    product_id=selected_prod.get("product_id"),
+                                    amount_inr=amount_inr,
+                                    payment_link_id=payment_link_response.get("id"),
+                                )
 
-                            data["bot_response"] = [
-                               {
-                                    "type": "cta_url",
-                                    "text": f"Click below to complete your payment of ₹{amount_inr} for {selected_prod.get('name', 'your order')}.",
-                                    "display_text": "Pay Now",
-                                    "url": payment_link_response.get("short_url"),
+                                order_doc = {
+                                    "order_id": order_id,
+                                    "phone_number": phone_number,
+                                    "username": username,
+                                    "product": selected_prod,
+                                    "address": user_profile.get("address"),
+                                    "amount_inr": amount_inr,
+                                    "amount_paise": amount_paise,
+                                    "payment_link_id": payment_link_response.get("id"),
+                                    "payment_short_url": payment_link_response.get("short_url"),
+                                    "razorpay_payment_id": None,
+                                    "payment_status": "pending",
                                 }
-                            ]
-                            user_profile["service_selected"] = ""
-                            user_profile["selected_product_id"] = {}
+                                save_order(order_doc)
+
+                                data["bot_response"] = [
+                                   {
+                                        "type": "cta_url",
+                                        "text": f"Click below to complete your payment of ₹{amount_inr} for {selected_prod.get('name', 'your order')}.",
+                                        "display_text": "Pay Now",
+                                        "url": payment_link_response.get("short_url"),
+                                        "order_id": order_id,
+                                    }
+                                ]
+                                user_profile["service_selected"] = ""
+                                user_profile["selected_product_id"] = {}
                         else:
                             data["bot_response"] = [
                                 {

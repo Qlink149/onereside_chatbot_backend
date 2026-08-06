@@ -133,7 +133,7 @@ def save_order(order_data: dict) -> str:
         order_data["created_at"] = int(time.time())
         order_data["updated_at"] = int(time.time())
         for _ in range(5):
-            order_id = _generate_order_id()
+            order_id = order_data.get("order_id") or _generate_order_id()
             order_data["order_id"] = order_id
             try:
                 result = orders.insert_one(order_data)
@@ -144,6 +144,7 @@ def save_order(order_data: dict) -> str:
                 return order_id
             except DuplicateKeyError:
                 logger.warning("Order ID collision, retrying", extra={"order_id": order_id})
+                order_data.pop("order_id", None)
         raise RuntimeError("Failed to generate a unique order_id after 5 attempts")
     except Exception as e:
         logger.exception("Failed to save order.", extra={"exception": e})

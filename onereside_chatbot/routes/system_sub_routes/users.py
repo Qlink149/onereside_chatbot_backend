@@ -23,11 +23,12 @@ def _serialize(doc: dict) -> dict:
 def list_users(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
+    channel: str | None = Query(None, pattern="^(whatsapp|web)$"),
     _: str = Depends(verify_api_key),
 ):
-    """List all users with pagination."""
+    """List all users with pagination. Optional channel=whatsapp|web filter."""
     skip = (page - 1) * limit
-    total, users = get_all_users(skip=skip, limit=limit)
+    total, users = get_all_users(skip=skip, limit=limit, channel=channel)
     return {"total": total, "page": page, "limit": limit, "data": [_serialize(u) for u in users]}
 
 

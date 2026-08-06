@@ -6,13 +6,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from onereside_chatbot.channels.registry import get_sender
 from onereside_chatbot.database.conversation_utils import save_agent_message, set_takeover
 from onereside_chatbot.database.message_utils import get_messages_page
 from onereside_chatbot.database.user_utils import get_user_profile, update_agent_request_flag
 from onereside_chatbot.routes.dependencies import verify_api_key
 from onereside_chatbot.utils.logger_config import logger
 from onereside_chatbot.utils.pubsub import PubSubManager
-from onereside_chatbot.whatsapp_functions.send_text_message import send_text_message
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 
@@ -88,6 +88,7 @@ def get_conversation_history(phone_number: str, _=Depends(verify_api_key)):
         "username": user.get("username", ""),
         "chat_history": user.get("chat_history", []),
         "human_takeover": user.get("human_takeover", {"active": False}),
+        "agent_request": bool(user.get("agent_request")),
     }
 
 
@@ -131,11 +132,12 @@ async def takeover_conversation(
 
     set_takeover(phone_number=phone_number, active=True, taken_by=body.taken_by)
 
-    # Send "agent joined" message to the user via WhatsApp
-    send_text_message(
-        phone_number=phone_number,
-        bot_response={"type": "text", "text": AGENT_JOINED_MESSAGE},
-    )
+    # Deliver join notice via channel sender (WhatsApp only — web uses agent_message SSE below)
+    if not phone_number.startswith("web:"):
+        get_sender(phone_number).send_text(
+            phone_number=phone_number,
+            bot_response={"type": "text", "text": AGENT_JOINED_MESSAGE},
+        )
     save_agent_message(phone_number=phone_number, agent_text=AGENT_JOINED_MESSAGE)
 
     pubsub = PubSubManager()
@@ -162,10 +164,11 @@ async def release_conversation(phone_number: str, _=Depends(verify_api_key)):
 
     set_takeover(phone_number=phone_number, active=False, taken_by=None)
 
-    send_text_message(
-        phone_number=phone_number,
-        bot_response={"type": "text", "text": AGENT_LEFT_MESSAGE},
-    )
+    if not phone_number.startswith("web:"):
+        get_sender(phone_number).send_text(
+            phone_number=phone_number,
+            bot_response={"type": "text", "text": AGENT_LEFT_MESSAGE},
+        )
     save_agent_message(phone_number=phone_number, agent_text=AGENT_LEFT_MESSAGE)
 
     pubsub = PubSubManager()
@@ -197,21 +200,26 @@ async def send_agent_message(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Enforce WhatsApp 24-hour conversation window
-    last_activity = user.get("updated_at", 0)
-    if time.time() - last_activity > 24 * 3600:
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot send message: WhatsApp 24-hour conversation window has expired. The user must message first.",
+    # Enforce WhatsApp 24-hour conversation window (Meta policy — not for web)
+    if not phone_number.startswith("web:"):
+        last_activity = user.get("updated_at", 0)
+        if time.time() - last_activity > 24 * 3600:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot send message: WhatsApp 24-hour conversation window has expired. The user must message first.",
+            )
+        result = get_sender(phone_number).send_text(
+            phone_number=phone_number,
+            bot_response={"type": "text", "text": body.message},
         )
-
-    # Send via WhatsApp
-    result = send_text_message(
-        phone_number=phone_number,
-        bot_response={"type": "text", "text": body.message},
-    )
-    if result.get("status") != "submitted":
-        logger.warning("Agent message may not have been delivered", extra={"phone_number": phone_number, "result": result})
+        if result.get("status") != "submitted":
+            logger.warning(
+                "Agent message may not have been delivered",
+                extra={"phone_number": phone_number, "result": result},
+            )
+    else:
+        # Web: delivery is the agent_message PubSub event below (widget SSE)
+        result = {"status": "submitted"}
 
     # Persist to chat history
     save_agent_message(phone_number=phone_number, agent_text=body.message)
