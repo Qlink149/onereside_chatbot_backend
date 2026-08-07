@@ -48,4 +48,5 @@ USER appuser
 
 EXPOSE 8000
 
-CMD ["uvicorn", "onereside_chatbot.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Render injects PORT; default 8000 for local/docker-compose.
+CMD ["sh", "-c", "uvicorn onereside_chatbot.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
