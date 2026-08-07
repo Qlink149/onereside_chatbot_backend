@@ -1,0 +1,66 @@
+services:
+  - type: web
+    name: onereside-chatbot-backend
+    runtime: docker
+    plan: free
+    region: singapore
+    branch: main
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /ping
+    autoDeploy: true
+    # Single instance required for in-memory SSE pub/sub
+    numInstances: 1
+    envVars:
+      - key: ENV_MODE
+        value: prod
+      - key: MONGO_PROD_DB_NAME
+        value: OneReside
+      - key: JWT_EXPIRE_MINUTES
+        value: "480"
+      - key: WEB_SUCCESS_URL
+        value: https://onereside.com
+      - key: WEB_ALLOWED_ORIGINS
+        value: https://onereside.com,https://onereside-chatbot-dashboard.vercel.app,https://onereside-widget.vercel.app
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: MONGO_URI
+        sync: false
+      - key: GUPSHUP_APP_ID
+        sync: false
+      - key: GUPSHUP_TOKEN
+        sync: false
+      - key: GUPSHUP_APP_NAME
+        sync: false
+      - key: GUPSHUP_API_KEY
+        sync: false
+      - key: CHROMA_API_KEY
+        sync: false
+      - key: CHROMA_TENANT
+        sync: false
+      - key: R2_ACCESS_KEY
+        sync: false
+      - key: R2_SECRET_KEY
+        sync: false
+      - key: R2_ENDPOINT
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: R2_PUBLIC_URL
+        sync: false
+      - key: R2_TOKEN_VALUE
+        sync: false
+      - key: RAZORPAY_APP_ID
+        sync: false
+      - key: RAZORPAY_APP_SECRETE
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
+      - key: LOGIN_USERNAME
+        sync: false
+      - key: LOGIN_PASS
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: DASHBOARD_API_KEY
+        sync: false
