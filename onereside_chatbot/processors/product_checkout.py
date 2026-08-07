@@ -12,7 +12,36 @@ from onereside_chatbot.models.service_list import ServiceList
 from onereside_chatbot.constants import SUPPORT_NOTIFY_NUMBERS, BRAND_ENQUIRY_RESPONSES, RAZORPAY_REDIRECT
 from onereside_chatbot.utils.env_load import web_success_url
 from onereside_chatbot.utils.trace import record_event, set_agent
+from onereside_chatbot.web_channel.identity import normalise_phone
 from onereside_chatbot.whatsapp_functions.template.send_product_enquiry_template import send_product_enquiry_template
+
+
+def _razorpay_customer_contact(user_ref: str, user_profile: dict) -> str | None:
+    """Resolve a real phone for Razorpay ``customer.contact`` (8–14 digits).
+
+    Web sessions use ``web:<uuid>`` as ``phone_number`` — that must never be
+    sent to Razorpay. Prefer checkout address phone, then identify phone,
+    then the WhatsApp user ref when it is a real number.
+    """
+    candidates: list[str] = []
+    personal = ((user_profile.get("address") or {}).get("personal_details") or {})
+    if personal.get("phone_number"):
+        candidates.append(str(personal["phone_number"]))
+    identifiers = user_profile.get("identifiers") or {}
+    if identifiers.get("phone"):
+        candidates.append(str(identifiers["phone"]))
+    if user_ref and not str(user_ref).startswith("web:"):
+        candidates.append(str(user_ref))
+
+    for raw in candidates:
+        try:
+            digits = normalise_phone(raw)
+        except ValueError:
+            continue
+        if 8 <= len(digits) <= 14:
+            return digits
+    return None
+
 
 class ProductCheckoutAgent(Processor):
     """Search a product checkout query."""
@@ -265,10 +294,55 @@ class ProductCheckoutAgent(Processor):
                                     else RAZORPAY_REDIRECT
                                 )
 
+                                contact_phone = _razorpay_customer_contact(
+                                    phone_number, user_profile
+                                )
+                                if not contact_phone:
+                                    logger.error(
+                                        "Cannot create payment link: no valid customer phone",
+                                        extra={"phone_number": phone_number},
+                                    )
+                                    data["bot_response"] = [
+                                        {
+                                            "type": "text",
+                                            "text": (
+                                                "I need a valid mobile number to create "
+                                                "your payment link. Please share your "
+                                                "10-digit phone number and try again."
+                                            ),
+                                        }
+                                    ]
+                                    return data
+
+                                personal = (
+                                    (user_profile.get("address") or {}).get(
+                                        "personal_details"
+                                    )
+                                    or {}
+                                )
+                                identifiers = user_profile.get("identifiers") or {}
+                                contact_name = (
+                                    " ".join(
+                                        p
+                                        for p in (
+                                            personal.get("first_name"),
+                                            personal.get("last_name"),
+                                        )
+                                        if p
+                                    ).strip()
+                                    or username
+                                )
+                                contact_email = (
+                                    personal.get("email")
+                                    or identifiers.get("email")
+                                    or ""
+                                )
+
                                 payment_link_response = create_payment_link(
                                     amount=amount_paise,
-                                    phone=phone_number,
-                                    name=username,
+                                    phone=contact_phone,
+                                    name=contact_name,
+                                    email=contact_email,
                                     description=f"Order for {selected_prod.get('name', '')}",
                                     callback_url=callback_url,
                                 )
