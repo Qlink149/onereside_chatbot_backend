@@ -119,7 +119,8 @@ def get_all_users(skip: int = 0, limit: int = 20, channel: str | None = None) ->
     """
     try:
         if channel == "web":
-            query = {"channel": "web"}
+            # Hide sessions merged into a canonical web user (orphans after identify).
+            query = {"channel": "web", "merged_into": None}
         else:
             # $ne so legacy WhatsApp docs without a channel field are included
             query = {"channel": {"$ne": "web"}}

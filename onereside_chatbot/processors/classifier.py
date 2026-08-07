@@ -65,6 +65,13 @@ class Classifier(Processor):
                         user_profile["service_selected"] = ServiceList.PRODUCT_CHECKOUT.value
                         get_sender(phone_number).send_status("classified", "Enquire Now")
                         return data
+                    # After OOS checkout clears service_selected; re-enter checkout so
+                    # product_checkout can handle msgid show_similar_oos.
+                    if button_title == "Show similar":
+                        record_event(data, "classifier_shortcut", rule="button_reply", button=button_title, routed_to=ServiceList.PRODUCT_CHECKOUT.value)
+                        user_profile["service_selected"] = ServiceList.PRODUCT_CHECKOUT.value
+                        get_sender(phone_number).send_status("classified", "Show similar")
+                        return data
 
                 if "nfm_reply" in interactive:
                     if interactive["nfm_reply"]["name"] == "flow":

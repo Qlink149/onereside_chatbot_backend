@@ -13,9 +13,11 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from onereside_chatbot.database.collections import idac, orders
+from onereside_chatbot.database.message_utils import get_messages_page
 from onereside_chatbot.orchestration.run_turn import run_turn
 from onereside_chatbot.utils.pubsub import PubSubManager
 from onereside_chatbot.web_channel.adapter import build_turn
+from onereside_chatbot.web_channel.identity import resolve_user
 from onereside_chatbot.web_channel.origin import extract_origin, validate_origin
 from onereside_chatbot.web_channel.session import create_session, resolve_token
 
@@ -25,6 +27,8 @@ _SSE_HEARTBEAT_INTERVAL = 25
 _SESSION_RATE_LIMIT = 10
 _SESSION_RATE_WINDOW = 60
 _WEB_TURN_CAP = 50
+_HISTORY_LIMIT = 50
+
 
 # Simple in-memory IP rate limiter for POST /session (no slowapi).
 _session_hits: dict[str, list[float]] = defaultdict(list)
@@ -57,6 +61,49 @@ def _bearer_user_ref(authorization: str | None, request: Request) -> str:
     return resolve_token(authorization.split(" ", 1)[1].strip(), origin)
 
 
+def _history_item(doc: dict) -> dict | None:
+    """Map a messages-collection doc to a widget-friendly bubble."""
+    role = doc.get("role")
+    msg_type = doc.get("type") or "text"
+    content = doc.get("content") or ""
+    raw = doc.get("raw") if isinstance(doc.get("raw"), dict) else {}
+    ts = doc.get("timestamp")
+    mid = doc.get("_id")
+
+    if role == "user":
+        text = content or (raw.get("text") or {}).get("body") or raw.get("text") or ""
+        if isinstance(text, dict):
+            text = text.get("body") or ""
+        return {
+            "id": mid,
+            "role": "user",
+            "type": "text",
+            "text": text,
+            "content": text,
+            "timestamp": ts,
+        }
+
+    if role in ("assistant", "human_agent", "system"):
+        # Prefer the stored bot_response part so ProductCard / quickreply hydrate.
+        if role == "assistant" and raw and raw.get("type"):
+            item = {"id": mid, "role": "bot", **raw, "timestamp": ts}
+            if "text" not in item and content:
+                item["text"] = content
+                item["content"] = content
+            return item
+        text = content or raw.get("text") or ""
+        return {
+            "id": mid,
+            "role": "bot" if role == "assistant" else "system",
+            "type": msg_type if msg_type != "unknown" else "text",
+            "text": text,
+            "content": text,
+            "timestamp": ts,
+        }
+
+    return None
+
+
 class SessionRequest(BaseModel):
     brand_id: str | None = None
 
@@ -84,6 +131,37 @@ async def web_session(request: Request, body: SessionRequest | None = None):
     return create_session(brand_id=brand_id, bound_origin=bound_origin)
 
 
+@router.get("/history")
+async def web_history(
+    request: Request,
+    authorization: str | None = Header(default=None),
+    limit: int = 50,
+):
+    """Return recent conversation messages for the authenticated web session.
+
+    Oldest-first for widget hydration after refresh / new tab.
+    """
+    user_ref = resolve_user(_bearer_user_ref(authorization, request))
+    limit = max(1, min(int(limit or _HISTORY_LIMIT), _HISTORY_LIMIT))
+    _total, docs = get_messages_page(user_ref, skip=0, limit=limit)
+    # get_messages_page is newest-first; reverse for chronological UI.
+    chronological = list(reversed(docs))
+    items = []
+    for doc in chronological:
+        mapped = _history_item(doc)
+        if mapped:
+            items.append(mapped)
+
+    profile = idac.find_one({"phone_number": user_ref}, {"identifiers": 1, "human_takeover": 1}) or {}
+    identifiers = profile.get("identifiers") or {}
+    return {
+        "user_ref": user_ref,
+        "identified": bool(identifiers.get("phone") or identifiers.get("email")),
+        "is_taken_over": bool((profile.get("human_takeover") or {}).get("active")),
+        "messages": items,
+    }
+
+
 @router.post("/message")
 async def web_message(
     request: Request,
@@ -94,7 +172,7 @@ async def web_message(
     if os.environ.get("WEB_KILL_SWITCH") == "1":
         raise HTTPException(status_code=503, detail="Web channel disabled")
 
-    user_ref = _bearer_user_ref(authorization, request)
+    user_ref = resolve_user(_bearer_user_ref(authorization, request))
     profile = idac.find_one({"phone_number": user_ref}) or {}
     turn_count = int(profile.get("web_turn_count") or 0)
     if turn_count >= _WEB_TURN_CAP:
@@ -124,7 +202,7 @@ async def web_stream(request: Request, token: str):
     origin = extract_origin(request)
     if origin:
         validate_origin(origin)
-    user_ref = resolve_token(token, origin)
+    user_ref = resolve_user(resolve_token(token, origin))
     pubsub = PubSubManager()
     queue = pubsub.subscribe(user_ref)
 
@@ -180,7 +258,7 @@ async def web_order(
     order_id: str,
     authorization: str | None = Header(default=None),
 ):
-    user_ref = _bearer_user_ref(authorization, request)
+    user_ref = resolve_user(_bearer_user_ref(authorization, request))
     doc = orders.find_one({"order_id": order_id, "phone_number": user_ref})
     if not doc:
         raise HTTPException(status_code=404, detail="Order not found")

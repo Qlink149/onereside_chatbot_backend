@@ -112,6 +112,9 @@ def build_inbound(user_ref: str, payload: dict) -> dict:
     if action == "cancel":
         return _button_reply(user_ref, "cancel purchase", "cancel_purchase")
 
+    if action == "show_similar":
+        return _button_reply(user_ref, "Show similar", "show_similar_oos")
+
     raise ValueError(f"Unknown action: {payload}")
 
 
