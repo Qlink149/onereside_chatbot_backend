@@ -1,3 +1,30 @@
+[project]
+name = "onereside-chatbot"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi[all]==0.111.0",
+  "httpx",
+  "openai",
+  "chromadb",
+  "pymongo",
+  "python-dotenv",
+  "gspread",
+  "google-auth",
+  "google-auth-oauthlib",
+  "google-auth-httplib2",
+  "pytz",
+  "pandas",
+  "openpyxl",
+  "xlrd",
+  "python-multipart",
+  "aiofiles",
+  "razorpay",
+  "boto3",
+  "python-jose[cryptography]",
+  "starlette>=0.37.2,<0.38.0",
+]
+
 [tool.ruff]
 line-length = 88
 target-version = "py312"
