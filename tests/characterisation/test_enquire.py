@@ -2,6 +2,7 @@
 
 import pytest
 
+from onereside_chatbot.processors.product_checkout import _resolve_contact_phone
 from tests.characterisation.conftest import (
     build_gupshup_payload,
     button_reply_message,
@@ -33,6 +34,10 @@ async def test_case11_enquire_product_creates_enquiry_and_admin_gupshup(
     assert enquiry is not None
 
     assert enquiry.get("product", {}).get("product_id") == pid
+    expected_contact = _resolve_contact_phone(test_phone, {})
+    if expected_contact:
+        assert enquiry.get("contact_phone") == expected_contact
+    assert enquiry.get("phone_number") == test_phone
 
     admin_template_calls = [
         c for c in gupshup_calls if "template/msg" in c["url"]
@@ -63,3 +68,7 @@ async def test_case12_enquire_brand_sets_brand_enquiry_type(
     assert enquiry is not None
 
     assert enquiry.get("type") == "brand_enquiry"
+    expected_contact = _resolve_contact_phone(test_phone, {})
+    if expected_contact:
+        assert enquiry.get("contact_phone") == expected_contact
+    assert enquiry.get("phone_number") == test_phone

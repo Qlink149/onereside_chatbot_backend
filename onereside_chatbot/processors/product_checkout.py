@@ -16,11 +16,10 @@ from onereside_chatbot.web_channel.identity import normalise_phone
 from onereside_chatbot.whatsapp_functions.template.send_product_enquiry_template import send_product_enquiry_template
 
 
-def _razorpay_customer_contact(user_ref: str, user_profile: dict) -> str | None:
-    """Resolve a real phone for Razorpay ``customer.contact`` (8–14 digits).
+def _resolve_contact_phone(user_ref: str, user_profile: dict) -> str | None:
+    """Resolve a real customer phone (8–14 digits), never a ``web:<uuid>`` session key.
 
-    Web sessions use ``web:<uuid>`` as ``phone_number`` — that must never be
-    sent to Razorpay. Prefer checkout address phone, then identify phone,
+    Prefer checkout address phone, then identify phone (``identifiers.phone``),
     then the WhatsApp user ref when it is a real number.
     """
     candidates: list[str] = []
@@ -41,6 +40,11 @@ def _razorpay_customer_contact(user_ref: str, user_profile: dict) -> str | None:
         if 8 <= len(digits) <= 14:
             return digits
     return None
+
+
+def _razorpay_customer_contact(user_ref: str, user_profile: dict) -> str | None:
+    """Alias for Razorpay ``customer.contact`` resolution."""
+    return _resolve_contact_phone(user_ref, user_profile)
 
 
 class ProductCheckoutAgent(Processor):
@@ -135,8 +139,9 @@ class ProductCheckoutAgent(Processor):
                         brand = get_brand_by_id(brand_id)
 
                         if brand:
+                            contact_phone = _resolve_contact_phone(phone_number, user_profile)
                             record_event(data, "brand_enquiry_saved", brand_id=brand_id, brand_name=brand.get("brand_name", ""))
-                            save_enquiry({
+                            enquiry_doc = {
                                 "phone_number": phone_number,
                                 "username": username,
                                 "type": "brand_enquiry",
@@ -144,10 +149,16 @@ class ProductCheckoutAgent(Processor):
                                     "brand_id": brand.get("brand_id"),
                                     "brand_name": brand.get("brand_name", ""),
                                 },
-                            })
+                            }
+                            if contact_phone:
+                                enquiry_doc["contact_phone"] = contact_phone
+                            save_enquiry(enquiry_doc)
                             logger.info(
                                 "Brand enquiry saved",
                                 extra={"phone_number": phone_number, "brand_id": brand_id},
+                            )
+                            notify_customer_phone = contact_phone or (
+                                phone_number if not str(phone_number).startswith("web:") else ""
                             )
                             for notify_number in SUPPORT_NOTIFY_NUMBERS:
                                 try:
@@ -155,7 +166,7 @@ class ProductCheckoutAgent(Processor):
                                         phone_number=notify_number,
                                         product_name=brand.get("brand_name", ""),
                                         customer_name=username,
-                                        customer_phone=phone_number,
+                                        customer_phone=notify_customer_phone,
                                     )
                                 except Exception as e:
                                     logger.error(
@@ -176,11 +187,12 @@ class ProductCheckoutAgent(Processor):
 
                         if button_title == "Enquire Now":
                             if product:
+                                contact_phone = _resolve_contact_phone(phone_number, user_profile)
                                 record_event(
                                     data, "product_enquiry_saved",
                                     product_id=prod_id, product_name=product.get("name", ""),
                                 )
-                                save_enquiry({
+                                enquiry_doc = {
                                     "phone_number": phone_number,
                                     "username": username,
                                     "product": {
@@ -190,10 +202,16 @@ class ProductCheckoutAgent(Processor):
                                         "brand_name": product.get("brand_name", ""),
                                         "category": product.get("category"),
                                     },
-                                })
+                                }
+                                if contact_phone:
+                                    enquiry_doc["contact_phone"] = contact_phone
+                                save_enquiry(enquiry_doc)
                                 logger.info(
                                     "Enquiry saved",
                                     extra={"phone_number": phone_number, "product_id": prod_id},
+                                )
+                                notify_customer_phone = contact_phone or (
+                                    phone_number if not str(phone_number).startswith("web:") else ""
                                 )
                                 for notify_number in SUPPORT_NOTIFY_NUMBERS:
                                     try:
@@ -201,7 +219,7 @@ class ProductCheckoutAgent(Processor):
                                             phone_number=notify_number,
                                             product_name=product.get("name", ""),
                                             customer_name=username,
-                                            customer_phone=phone_number,
+                                            customer_phone=notify_customer_phone,
                                         )
                                     except Exception as e:
                                         logger.error(
@@ -367,6 +385,8 @@ class ProductCheckoutAgent(Processor):
                                     "razorpay_payment_id": None,
                                     "payment_status": "pending",
                                 }
+                                if contact_phone:
+                                    order_doc["contact_phone"] = contact_phone
                                 save_order(order_doc)
 
                                 data["bot_response"] = [

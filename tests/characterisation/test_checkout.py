@@ -122,3 +122,10 @@ async def test_case9_continue_creates_razorpay_and_cta_url(
     assert len(razorpay_calls) >= 1
 
     assert any(i.get("type") == "cta_url" for i in data["bot_response"])
+
+    from tests.db_guard import orders
+
+    order = orders.find_one({"phone_number": test_phone})
+    assert order is not None
+    # Prefer address personal phone over WhatsApp ref (SAMPLE_ADDRESS).
+    assert order.get("contact_phone") == SAMPLE_ADDRESS["personal_details"]["phone_number"]

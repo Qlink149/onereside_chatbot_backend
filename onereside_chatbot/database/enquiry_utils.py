@@ -8,6 +8,7 @@ from onereside_chatbot.utils.logger_config import logger
 
 _LIST_PROJECTION = {
     "phone_number": 1,
+    "contact_phone": 1,
     "username": 1,
     "type": 1,
     "product.product_id": 1,

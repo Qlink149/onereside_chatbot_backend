@@ -11,6 +11,8 @@ from onereside_chatbot.utils.logger_config import logger
 
 _LIST_PROJECTION = {
     "phone_number": 1,
+    "contact_phone": 1,
+    "address.personal_details.phone_number": 1,
     "username": 1,
     "product.product_id": 1,
     "product.name": 1,
